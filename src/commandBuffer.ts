@@ -1,5 +1,5 @@
 import { Color, Rect, Viewport } from "./types";
-import { Command, FrameCommands } from "./commands";
+import { Command, DrawTrianglesCommand, FrameCommands } from "./commands";
 
 type ColorFloats = { r: number; g: number; b: number; a: number };
 
@@ -39,9 +39,55 @@ export class CommandBuffer {
 
   flush(): FrameCommands {
     const vertices = new Float32Array(this.vertices);
-    const commands = this.commands.slice();
+    const commands = this.batchCommands(this.commands);
     this.reset(this.currentViewport ?? this.defaultViewport);
     return { vertices, commands };
+  }
+
+  private batchCommands(commands: Command[]): Command[] {
+    const batched: Command[] = [];
+    let i = 0;
+
+    while (i < commands.length) {
+      const command = commands[i];
+
+      // State-changing commands break batching and are added as-is
+      if (
+        command.type === "setViewport" ||
+        command.type === "clear" ||
+        command.type === "pushLayer" ||
+        command.type === "popLayer"
+      ) {
+        batched.push(command);
+        i++;
+        continue;
+      }
+
+      // Collect consecutive drawTriangles commands
+      if (command.type === "drawTriangles") {
+        let batchOffset = command.offset;
+        let batchCount = command.count;
+        i++;
+
+        // Continue collecting consecutive drawTriangles commands
+        while (i < commands.length && commands[i].type === "drawTriangles") {
+          const nextCommand = commands[i] as DrawTrianglesCommand;
+          // Vertices are contiguous, so we can combine by summing counts
+          batchCount += nextCommand.count;
+          i++;
+        }
+
+        // Add the batched drawTriangles command
+        batched.push({ type: "drawTriangles", offset: batchOffset, count: batchCount });
+        continue;
+      }
+
+      // Unknown command type - add as-is
+      batched.push(command);
+      i++;
+    }
+
+    return batched;
   }
 
   drawRect(rect: Rect, color: Color) {

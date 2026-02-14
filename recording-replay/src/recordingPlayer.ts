@@ -4,6 +4,7 @@ import { FrameRecording, DrawCommand, TextRect } from "./frameRecording";
 
 export class RecordingPlayer {
   private recording: FrameRecording | null = null;
+  maxCommands = -1
 
   /**
    * Load a frame recording and prepare it for playback
@@ -43,7 +44,10 @@ export class RecordingPlayer {
     let currentViewport: Viewport | null = null;
 
     // Sort commands by sequence to ensure correct order
-    const sortedCommands = [...recording.commands]; //.sort((a, b) => a.sequence - b.sequence);
+    let sortedCommands = [...recording.commands]; //.sort((a, b) => a.sequence - b.sequence);
+    if (this.maxCommands > 0) {
+      sortedCommands = sortedCommands.slice(0, this.maxCommands);
+    }
 
     // Render all commands
     for (const command of sortedCommands) {

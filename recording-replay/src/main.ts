@@ -125,3 +125,11 @@ fileInput.addEventListener("change", (e) => {
 
 // Initial render (empty canvas)
 renderFrame();
+
+// Mouse control timeline
+// document.addEventListener("mousemove", (e) => {
+//   if (recordingPlayer) {
+//     recordingPlayer.maxCommands = Math.floor(e.clientX / canvas.width * currentRecording.commands.length);
+//     renderFrame();
+//   }
+// });
