@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@fontsource/roboto": "^5.0.0",
     "regl": "^2.1.0"
   },
   "devDependencies": {

@@ -6,6 +6,13 @@ export type DrawTrianglesCommand = {
   count: number; // vertex count
 };
 
+export type DrawTexturedTrianglesCommand = {
+  type: "drawTexturedTriangles";
+  offset: number; // vertex offset
+  count: number; // vertex count
+  textureId: string; // Identifier for the texture to use
+};
+
 export type ClearCommand = {
   type: "clear";
   color: Color;
@@ -29,6 +36,7 @@ export type PopLayerCommand = {
 
 export type Command =
   | DrawTrianglesCommand
+  | DrawTexturedTrianglesCommand
   | ClearCommand
   | SetViewportCommand
   | PushLayerCommand
@@ -36,5 +44,6 @@ export type Command =
 
 export type FrameCommands = {
   vertices: Float32Array;
+  texturedVertices?: Float32Array;
   commands: Command[];
 };

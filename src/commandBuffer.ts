@@ -1,10 +1,11 @@
 import { Color, Rect, Viewport } from "./types";
-import { Command, DrawTrianglesCommand, FrameCommands } from "./commands";
+import { Command, DrawTrianglesCommand, DrawTexturedTrianglesCommand, FrameCommands } from "./commands";
 
 type ColorFloats = { r: number; g: number; b: number; a: number };
 
 export class CommandBuffer {
   private vertices: number[] = [];
+  private texturedVertices: number[] = [];
   private commands: Command[] = [];
   private currentViewport: Viewport | null = null;
 
@@ -15,6 +16,7 @@ export class CommandBuffer {
 
   reset(viewport: Viewport = this.defaultViewport) {
     this.vertices.length = 0;
+    this.texturedVertices.length = 0;
     this.commands.length = 0;
     this.currentViewport = viewport;
     this.commands.push({ type: "setViewport", viewport });
@@ -40,8 +42,15 @@ export class CommandBuffer {
   flush(): FrameCommands {
     const vertices = new Float32Array(this.vertices);
     const commands = this.batchCommands(this.commands);
+    const result: FrameCommands = { vertices, commands };
+    
+    // Include textured vertices if any exist
+    if (this.texturedVertices.length > 0) {
+      result.texturedVertices = new Float32Array(this.texturedVertices);
+    }
+    
     this.reset(this.currentViewport ?? this.defaultViewport);
-    return { vertices, commands };
+    return result;
   }
 
   private batchCommands(commands: Command[]): Command[] {
@@ -79,6 +88,30 @@ export class CommandBuffer {
 
         // Add the batched drawTriangles command
         batched.push({ type: "drawTriangles", offset: batchOffset, count: batchCount });
+        continue;
+      }
+
+      // Collect consecutive drawTexturedTriangles commands with same texture
+      if (command.type === "drawTexturedTriangles") {
+        const texturedCommand = command as DrawTexturedTrianglesCommand;
+        let batchOffset = texturedCommand.offset;
+        let batchCount = texturedCommand.count;
+        const textureId = texturedCommand.textureId;
+        i++;
+
+        // Continue collecting consecutive drawTexturedTriangles commands with same texture
+        while (
+          i < commands.length &&
+          commands[i].type === "drawTexturedTriangles" &&
+          (commands[i] as DrawTexturedTrianglesCommand).textureId === textureId
+        ) {
+          const nextCommand = commands[i] as DrawTexturedTrianglesCommand;
+          batchCount += nextCommand.count;
+          i++;
+        }
+
+        // Add the batched drawTexturedTriangles command
+        batched.push({ type: "drawTexturedTriangles", offset: batchOffset, count: batchCount, textureId });
         continue;
       }
 
@@ -348,12 +381,68 @@ export class CommandBuffer {
     }
   }
 
+  /**
+   * Draw a textured rectangle
+   */
+  drawTexturedRect(rect: Rect, uv: { u1: number; v1: number; u2: number; v2: number }, color: Color, textureId: string) {
+    const { x, y, w, h } = rect;
+    const c = this.normalizeColor(color);
+    const offset = this.beginTexturedDraw();
+
+    // Top-left, top-right, bottom-left
+    this.appendTexturedTriangle(x, y, uv.u1, uv.v1, x + w, y, uv.u2, uv.v1, x, y + h, uv.u1, uv.v2, c);
+    // Top-right, bottom-right, bottom-left
+    this.appendTexturedTriangle(x + w, y, uv.u2, uv.v1, x + w, y + h, uv.u2, uv.v2, x, y + h, uv.u1, uv.v2, c);
+
+    this.endTexturedDraw(offset, textureId);
+  }
+
+  private appendTexturedTriangle(
+    x1: number,
+    y1: number,
+    u1: number,
+    v1: number,
+    x2: number,
+    y2: number,
+    u2: number,
+    v2: number,
+    x3: number,
+    y3: number,
+    u3: number,
+    v3: number,
+    c: ColorFloats
+  ) {
+    this.pushTexturedVertex(x1, y1, u1, v1, c);
+    this.pushTexturedVertex(x2, y2, u2, v2, c);
+    this.pushTexturedVertex(x3, y3, u3, v3, c);
+  }
+
+  private beginTexturedDraw() {
+    return this.texturedVertexCount();
+  }
+
+  private endTexturedDraw(offset: number, textureId: string) {
+    const count = this.texturedVertexCount() - offset;
+    if (count > 0) {
+      this.commands.push({ type: "drawTexturedTriangles", offset, count, textureId });
+    }
+  }
+
   private vertexCount() {
     return this.vertices.length / 6;
   }
 
+  private texturedVertexCount() {
+    return this.texturedVertices.length / 8;
+  }
+
   private pushVertex(x: number, y: number, c: ColorFloats) {
     this.vertices.push(x, y, c.r, c.g, c.b, c.a);
+  }
+
+  private pushTexturedVertex(x: number, y: number, u: number, v: number, c: ColorFloats) {
+    // Format: [x, y, r, g, b, a, u, v] (8 floats)
+    this.texturedVertices.push(x, y, c.r, c.g, c.b, c.a, u, v);
   }
 
   private normalizeColor(color: Color): ColorFloats {

@@ -1,16 +1,50 @@
 import { CommandBuffer } from "../../src/commandBuffer";
 import { Viewport, Rect, Color } from "../../src/types";
 import { FrameRecording, DrawCommand, TextRect } from "./frameRecording";
+import { TextureAtlasBuilder, TextureAtlas } from "./textureAtlas";
+import { AtlasLayout, SimpleGridLayout } from "./atlasLayout";
 
 export class RecordingPlayer {
   private recording: FrameRecording | null = null;
-  maxCommands = -1
+  private textureAtlas: TextureAtlas | null = null;
+  private textureId: string = "textAtlas";
+  private layout: AtlasLayout;
+  maxCommands = -1;
+
+  constructor(layout?: AtlasLayout) {
+    this.layout = layout ?? new SimpleGridLayout();
+  }
 
   /**
    * Load a frame recording and prepare it for playback
    */
   loadRecording(recording: FrameRecording) {
     this.recording = recording;
+    
+    // Build texture atlas from text rects
+    const builder = new TextureAtlasBuilder();
+    this.textureAtlas = builder.buildAtlas(recording, this.layout);
+  }
+
+  /**
+   * Get the texture atlas canvas (for registration with ReglAdapter)
+   */
+  getTextureAtlas(): TextureAtlas | null {
+    return this.textureAtlas;
+  }
+
+  /**
+   * Get the texture ID used for rendering
+   */
+  getTextureId(): string {
+    return this.textureId;
+  }
+
+  /**
+   * Set the texture ID (useful if multiple atlases are used)
+   */
+  setTextureId(textureId: string) {
+    this.textureId = textureId;
   }
 
   /**
@@ -169,15 +203,47 @@ export class RecordingPlayer {
   }
 
   private renderTextRect(commandBuffer: CommandBuffer, textRect: TextRect): void {
-    // Render text as colored rectangle
-    commandBuffer.drawRect(
+    if (!this.textureAtlas) {
+      // Fallback to colored rectangle if atlas not available
+      commandBuffer.drawRect(
+        {
+          x: textRect.x,
+          y: textRect.y,
+          w: textRect.width,
+          h: textRect.height,
+        },
+        textRect.color
+      );
+      return;
+    }
+
+    // Get UV coordinates for this text rect
+    const uv = this.textureAtlas.entries.get(textRect);
+    if (!uv) {
+      // Fallback if UV mapping not found
+      commandBuffer.drawRect(
+        {
+          x: textRect.x,
+          y: textRect.y,
+          w: textRect.width,
+          h: textRect.height,
+        },
+        textRect.color
+      );
+      return;
+    }
+
+    // Render as textured rectangle
+    commandBuffer.drawTexturedRect(
       {
         x: textRect.x,
         y: textRect.y,
         w: textRect.width,
         h: textRect.height,
       },
-      textRect.color
+      uv,
+      textRect.color,
+      this.textureId
     );
   }
 
