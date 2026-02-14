@@ -143,6 +143,135 @@ export class CommandBuffer {
     this.endDraw(offset);
   }
 
+  drawCircleOutline(x: number, y: number, radius: number, lineWidth: number, color: Color, segments = 60) {
+    this.drawArcOutline(x, y, radius, 0, Math.PI * 2, lineWidth, color, segments);
+  }
+
+  drawArcOutline(
+    x: number,
+    y: number,
+    radius: number,
+    startAngle: number,
+    endAngle: number,
+    lineWidth: number,
+    color: Color,
+    segments = 60
+  ) {
+    const c = this.normalizeColor(color);
+    const offset = this.beginDraw();
+
+    // Handle edge case: if lineWidth >= radius, draw filled circle instead
+    if (lineWidth >= radius) {
+      this.drawArc(x, y, radius, startAngle, endAngle, color, segments);
+      return;
+    }
+
+    const innerRadius = Math.max(0, radius - lineWidth);
+    const angleIncrement = (endAngle - startAngle) / segments;
+
+    for (let i = 0; i < segments; i++) {
+      const angle1 = startAngle + angleIncrement * i;
+      const angle2 = startAngle + angleIncrement * (i + 1);
+
+      // Outer points
+      const outerX1 = x + radius * Math.cos(angle1);
+      const outerY1 = y + radius * Math.sin(angle1);
+      const outerX2 = x + radius * Math.cos(angle2);
+      const outerY2 = y + radius * Math.sin(angle2);
+
+      // Inner points
+      const innerX1 = x + innerRadius * Math.cos(angle1);
+      const innerY1 = y + innerRadius * Math.sin(angle1);
+      const innerX2 = x + innerRadius * Math.cos(angle2);
+      const innerY2 = y + innerRadius * Math.sin(angle2);
+
+      // Create quad as two triangles
+      // Triangle 1: outer1, outer2, inner1
+      this.appendTriangle(outerX1, outerY1, outerX2, outerY2, innerX1, innerY1, c);
+      // Triangle 2: outer2, inner2, inner1
+      this.appendTriangle(outerX2, outerY2, innerX2, innerY2, innerX1, innerY1, c);
+    }
+
+    this.endDraw(offset);
+  }
+
+  drawRectOutline(rect: Rect, lineWidth: number, color: Color) {
+    const { x, y, w, h } = rect;
+    const c = this.normalizeColor(color);
+    const offset = this.beginDraw();
+
+    // Top edge
+    this.appendRect(x, y, w, lineWidth, c);
+    // Bottom edge
+    this.appendRect(x, y + h - lineWidth, w, lineWidth, c);
+    // Left edge (excluding corners already drawn)
+    this.appendRect(x, y + lineWidth, lineWidth, h - 2 * lineWidth, c);
+    // Right edge (excluding corners already drawn)
+    this.appendRect(x + w - lineWidth, y + lineWidth, lineWidth, h - 2 * lineWidth, c);
+
+    this.endDraw(offset);
+  }
+
+  drawRoundedRectOutline(rect: Rect, radius: number, lineWidth: number, color: Color, segments = 20) {
+    const { x, y, w, h } = rect;
+    const c = this.normalizeColor(color);
+    const offset = this.beginDraw();
+
+    const maxRadius = Math.min(w, h) / 2;
+    const r = Math.min(radius, maxRadius);
+    const innerRadius = Math.max(0, r - lineWidth);
+
+    // Handle edge case: if lineWidth >= radius, draw filled rounded rect instead
+    if (lineWidth >= r) {
+      this.drawRoundedRect(rect, radius, color, segments);
+      return;
+    }
+
+    // Draw corner arc outlines
+    const drawCornerOutline = (cx: number, cy: number, startAngle: number) => {
+      for (let i = 0; i < segments; i++) {
+        const angle1 = startAngle + (Math.PI / 2) * (i / segments);
+        const angle2 = startAngle + (Math.PI / 2) * ((i + 1) / segments);
+
+        // Outer points
+        const outerX1 = cx + r * Math.cos(angle1);
+        const outerY1 = cy + r * Math.sin(angle1);
+        const outerX2 = cx + r * Math.cos(angle2);
+        const outerY2 = cy + r * Math.sin(angle2);
+
+        // Inner points
+        const innerX1 = cx + innerRadius * Math.cos(angle1);
+        const innerY1 = cy + innerRadius * Math.sin(angle1);
+        const innerX2 = cx + innerRadius * Math.cos(angle2);
+        const innerY2 = cy + innerRadius * Math.sin(angle2);
+
+        // Create quad as two triangles
+        this.appendTriangle(outerX1, outerY1, outerX2, outerY2, innerX1, innerY1, c);
+        this.appendTriangle(outerX2, outerY2, innerX2, innerY2, innerX1, innerY1, c);
+      }
+    };
+
+    // Top-left corner
+    drawCornerOutline(x + r, y + r, Math.PI);
+    // Top-right corner
+    drawCornerOutline(x + w - r, y + r, 1.5 * Math.PI);
+    // Bottom-right corner
+    drawCornerOutline(x + w - r, y + h - r, 0);
+    // Bottom-left corner
+    drawCornerOutline(x + r, y + h - r, 0.5 * Math.PI);
+
+    // Top edge (between corners)
+    this.appendRect(x + r, y, w - 2 * r, lineWidth, c);
+    // Bottom edge (between corners)
+    this.appendRect(x + r, y + h - lineWidth, w - 2 * r, lineWidth, c);
+    // Left edge (between corners)
+    this.appendRect(x, y + r, lineWidth, h - 2 * r, c);
+    // Right edge (between corners)
+    this.appendRect(x + w - lineWidth, y + r, lineWidth, h - 2 * r, c);
+
+    this.endDraw(offset);
+  }
+
   private appendTriangle(
     x1: number,
     y1: number,

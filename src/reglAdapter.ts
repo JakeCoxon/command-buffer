@@ -15,11 +15,14 @@ export class ReglAdapter {
   private currentViewport: Viewport | null = null;
   private surfaceSize: { w: number; h: number } | null = null;
 
+  drawCalls: number = 0;
+
   constructor(private readonly regl: ReglLike, private readonly options: ReglAdapterOptions = {}) {
     this.drawShapes = this.createShapePipeline();
   }
 
   render(frame: FrameCommands) {
+    this.drawCalls = 0
     for (const command of frame.commands) {
       this.executeCommand(command, frame);
     }
@@ -51,6 +54,7 @@ export class ReglAdapter {
         const stride = 24;
         const offsetBytes = command.offset * stride;
         const projection = this.currentViewport ? this.orthoTopLeft(this.currentViewport) : this.identity();
+        this.drawCalls++;
         this.drawShapes({
           vertices: frame.vertices,
           offsetBytes,
@@ -102,6 +106,7 @@ export class ReglAdapter {
       count: this.regl.prop("count"),
       primitive: "triangles",
       viewport: this.regl.prop("viewport"),
+      depth: { enable: false },
       blend: {
         enable: true,
         func: { src: "src alpha", dst: "one minus src alpha" },
