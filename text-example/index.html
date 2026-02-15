@@ -9,40 +9,6 @@
   <body>
     <div id="stats"></div>
     <canvas id="canvas"></canvas>
-    
-    <!-- Debug Panel -->
-    <div id="debugPanel" class="debug-panel" style="display: none;">
-      <div class="debug-header">
-        <h3>Font Atlas Debug</h3>
-        <button id="debugClose">×</button>
-      </div>
-      <div class="debug-content">
-        <div class="debug-info">
-          <div id="debugAtlasInfo">Atlas: -</div>
-          <div id="debugGlyphInfo">Selected: -</div>
-          <div id="debugPositionInfo">Position: -</div>
-          <div id="debugUVInfo">UV: -</div>
-          <div id="debugMetricsInfo">Metrics: -</div>
-        </div>
-        <div class="debug-controls">
-          <label>
-            <input type="checkbox" id="debugShowGrid" checked> Show Grid
-          </label>
-          <label>
-            <input type="checkbox" id="debugShowBoxes" checked> Show Boxes
-          </label>
-          <label>
-            <input type="checkbox" id="debugShowCoords" checked> Show Coords
-          </label>
-          <button id="debugLogAll">Log All Glyphs</button>
-          <button id="debugExport">Export Atlas</button>
-        </div>
-        <canvas id="debugCanvas"></canvas>
-      </div>
-    </div>
-    
-    <button id="debugToggle" class="debug-toggle">Debug</button>
-    
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
