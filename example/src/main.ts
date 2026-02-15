@@ -1,17 +1,15 @@
 import createREGL from "regl";
-import { CommandBuffer } from "../../src/commandBuffer";
-import { ReglAdapter } from "../../src/reglAdapter";
+import { Renderer, ReglAdapter } from "../../src";
 
 const canvas = document.getElementById("canvas") as HTMLCanvasElement;
 const stats = document.getElementById("stats") as HTMLDivElement;
 const regl = createREGL({ canvas });
 
-const commandBuffer = new CommandBuffer({
-  rect: { x: 0, y: 0, w: 0, h: 0 },
-  pixelRatio: window.devicePixelRatio || 1,
-});
-
+const pixelRatio = window.devicePixelRatio || 1;
 const adapter = new ReglAdapter(regl as any);
+const renderer = new Renderer(adapter, {
+  viewport: { rect: { x: 0, y: 0, w: 0, h: 0 }, pixelRatio }
+});
 
 const sceneFbo = regl.framebuffer({ width: 1, height: 1 });
 
@@ -67,7 +65,6 @@ const drawPost = regl({
 });
 
 function resize() {
-  const pixelRatio = window.devicePixelRatio || 1;
   const width = window.innerWidth;
   const height = window.innerHeight;
 
@@ -76,7 +73,7 @@ function resize() {
   canvas.style.width = `${width}px`;
   canvas.style.height = `${height}px`;
 
-  commandBuffer.setViewport({
+  renderer.setViewport({
     rect: { x: 0, y: 0, w: width, h: height },
     pixelRatio,
   });
@@ -85,31 +82,31 @@ function resize() {
 }
 
 function drawHudPanel(x: number, y: number, w: number, h: number, accent: [number, number, number]) {
-  commandBuffer.drawRoundedRect({ x, y, w, h }, 12, [30, 60, 90]);
-  commandBuffer.drawRect({ x: x + 12, y: y + 12, w: w - 24, h: 6 }, accent);
-  commandBuffer.drawRect({ x: x + 12, y: y + 26, w: w - 60, h: 4 }, [80, 160, 220]);
-  commandBuffer.drawRect({ x: x + 12, y: y + h - 20, w: w - 24, h: 6 }, [50, 120, 160]);
+  renderer.drawRoundedRect({ x, y, w, h }, 12, [30, 60, 90]);
+  renderer.drawRect({ x: x + 12, y: y + 12, w: w - 24, h: 6 }, accent);
+  renderer.drawRect({ x: x + 12, y: y + 26, w: w - 60, h: 4 }, [80, 160, 220]);
+  renderer.drawRect({ x: x + 12, y: y + h - 20, w: w - 24, h: 6 }, [50, 120, 160]);
 }
 
 function drawRadar(x: number, y: number, radius: number, time: number) {
   const sweep = (time / 1200) % (Math.PI * 2);
-  commandBuffer.drawCircle(x, y, radius, [30, 120, 90]);
-  commandBuffer.drawArc(x, y, radius, sweep - 0.4, sweep + 0.4, [80, 220, 170], 24);
-  commandBuffer.drawArc(x, y, radius * 0.7, sweep - 0.2, sweep + 0.2, [60, 180, 140], 16);
-  commandBuffer.drawLine(x - radius, y, x + radius, y, 1.2, [40, 100, 80]);
-  commandBuffer.drawLine(x, y - radius, x, y + radius, 1.2, [40, 100, 80]);
+  renderer.drawCircle(x, y, radius, [30, 120, 90]);
+  renderer.drawArc(x, y, radius, sweep - 0.4, sweep + 0.4, [80, 220, 170], 24);
+  renderer.drawArc(x, y, radius * 0.7, sweep - 0.2, sweep + 0.2, [60, 180, 140], 16);
+  renderer.drawLine(x - radius, y, x + radius, y, 1.2, [40, 100, 80]);
+  renderer.drawLine(x, y - radius, x, y + radius, 1.2, [40, 100, 80]);
 }
 
 function drawCrosshair(x: number, y: number, size: number) {
-  commandBuffer.drawCircle(x, y, size, [120, 200, 255], 30);
-  commandBuffer.drawLine(x - size - 6, y, x - size + 10, y, 2, [200, 240, 255]);
-  commandBuffer.drawLine(x + size - 10, y, x + size + 6, y, 2, [200, 240, 255]);
-  commandBuffer.drawLine(x, y - size - 6, x, y - size + 10, 2, [200, 240, 255]);
-  commandBuffer.drawLine(x, y + size - 10, x, y + size + 6, 2, [200, 240, 255]);
+  renderer.drawCircle(x, y, size, [120, 200, 255], 30);
+  renderer.drawLine(x - size - 6, y, x - size + 10, y, 2, [200, 240, 255]);
+  renderer.drawLine(x + size - 10, y, x + size + 6, y, 2, [200, 240, 255]);
+  renderer.drawLine(x, y - size - 6, x, y - size + 10, 2, [200, 240, 255]);
+  renderer.drawLine(x, y + size - 10, x, y + size + 6, 2, [200, 240, 255]);
 }
 
 function drawFrame(time: number) {
-  commandBuffer.clear([24, 24, 28, 255], 1);
+  renderer.beginFrame([24, 24, 28, 255]);
 
   const w = window.innerWidth;
   const h = window.innerHeight;
@@ -122,67 +119,69 @@ function drawFrame(time: number) {
   drawCrosshair(w - 180, h - 260, 26);
 
   const radius = 50 + Math.sin(time / 1000) * 20;
-  commandBuffer.drawCircle(160, 260, radius, [255, 120, 180]);
-  commandBuffer.drawArc(160, 260, radius + 18, 0.2, Math.PI * 1.4, [100, 220, 255], 40);
-  commandBuffer.drawArc(160, 260, radius + 34, Math.PI * 1.2, Math.PI * 1.9, [255, 200, 100], 30);
-  commandBuffer.drawArc(160, 260, radius + 52, 0.0, Math.PI * 0.8, [80, 140, 220], 20);
+  renderer.drawCircle(160, 260, radius, [255, 120, 180]);
+  renderer.drawArc(160, 260, radius + 18, 0.2, Math.PI * 1.4, [100, 220, 255], 40);
+  renderer.drawArc(160, 260, radius + 34, Math.PI * 1.2, Math.PI * 1.9, [255, 200, 100], 30);
+  renderer.drawArc(160, 260, radius + 52, 0.0, Math.PI * 0.8, [80, 140, 220], 20);
 
   const bracketSize = 28;
-  commandBuffer.drawLine(40, 40, 40 + bracketSize, 40, 3, [140, 220, 255]);
-  commandBuffer.drawLine(40, 40, 40, 40 + bracketSize, 3, [140, 220, 255]);
-  commandBuffer.drawLine(w - 40 - bracketSize, 40, w - 40, 40, 3, [140, 220, 255]);
-  commandBuffer.drawLine(w - 40, 40, w - 40, 40 + bracketSize, 3, [140, 220, 255]);
-  commandBuffer.drawLine(40, h - 40, 40 + bracketSize, h - 40, 3, [140, 220, 255]);
-  commandBuffer.drawLine(40, h - 40 - bracketSize, 40, h - 40, 3, [140, 220, 255]);
-  commandBuffer.drawLine(w - 40 - bracketSize, h - 40, w - 40, h - 40, 3, [140, 220, 255]);
-  commandBuffer.drawLine(w - 40, h - 40 - bracketSize, w - 40, h - 40, 3, [140, 220, 255]);
+  renderer.drawLine(40, 40, 40 + bracketSize, 40, 3, [140, 220, 255]);
+  renderer.drawLine(40, 40, 40, 40 + bracketSize, 3, [140, 220, 255]);
+  renderer.drawLine(w - 40 - bracketSize, 40, w - 40, 40, 3, [140, 220, 255]);
+  renderer.drawLine(w - 40, 40, w - 40, 40 + bracketSize, 3, [140, 220, 255]);
+  renderer.drawLine(40, h - 40, 40 + bracketSize, h - 40, 3, [140, 220, 255]);
+  renderer.drawLine(40, h - 40 - bracketSize, 40, h - 40, 3, [140, 220, 255]);
+  renderer.drawLine(w - 40 - bracketSize, h - 40, w - 40, h - 40, 3, [140, 220, 255]);
+  renderer.drawLine(w - 40, h - 40 - bracketSize, w - 40, h - 40, 3, [140, 220, 255]);
 
-  commandBuffer.drawRect({ x: 60, y: h - 200, w: 220, h: 80 }, [30, 120, 180]);
-  commandBuffer.drawRect({ x: 80, y: h - 180, w: 180, h: 40 }, [120, 220, 255]);
+  renderer.drawRect({ x: 60, y: h - 200, w: 220, h: 80 }, [30, 120, 180]);
+  renderer.drawRect({ x: 80, y: h - 180, w: 180, h: 40 }, [120, 220, 255]);
 
-  commandBuffer.drawLine(40, h - 60, w - 40, h - 120, 8, [120, 255, 160]);
-  commandBuffer.drawLine(40, h - 80, w - 120, h - 160, 2, [80, 150, 200]);
-  commandBuffer.drawLine(60, 220, w - 60, 220, 1.5, [90, 140, 200]);
-  commandBuffer.drawLine(60, 240, w - 60, 240, 1.0, [50, 90, 140]);
+  renderer.drawLine(40, h - 60, w - 40, h - 120, 8, [120, 255, 160]);
+  renderer.drawLine(40, h - 80, w - 120, h - 160, 2, [80, 150, 200]);
+  renderer.drawLine(60, 220, w - 60, 220, 1.5, [90, 140, 200]);
+  renderer.drawLine(60, 240, w - 60, 240, 1.0, [50, 90, 140]);
 
   for (let i = 0; i < 12; i++) {
     const x = 80 + i * 40;
     const y = 200;
-    commandBuffer.drawLine(x, y, x, y + (i % 3 === 0 ? 18 : 10), 1.5, [70, 130, 190]);
+    renderer.drawLine(x, y, x, y + (i % 3 === 0 ? 18 : 10), 1.5, [70, 130, 190]);
   }
 
   for (let i = 0; i < 6; i++) {
     const x = w - 300 + i * 40;
     const y = h - 140;
-    commandBuffer.drawRect({ x, y, w: 28, h: 60 }, [40, 90, 140]);
-    commandBuffer.drawRect({ x: x + 4, y: y + 6, w: 20, h: 10 + (i % 3) * 12 }, [140, 230, 255]);
+    renderer.drawRect({ x, y, w: 28, h: 60 }, [40, 90, 140]);
+    renderer.drawRect({ x: x + 4, y: y + 6, w: 20, h: 10 + (i % 3) * 12 }, [140, 230, 255]);
   }
 
   for (let i = 0; i < 4; i++) {
     const x = 70 + i * 36;
     const y = h - 280;
     const barHeight = 60 + Math.sin(time / 800 + i) * 20;
-    commandBuffer.drawRect({ x, y: y + (80 - barHeight), w: 24, h: barHeight }, [80, 180, 240]);
+    renderer.drawRect({ x, y: y + (80 - barHeight), w: 24, h: barHeight }, [80, 180, 240]);
   }
 
   for (let i = 0; i < 6; i++) {
     const startX = w * 0.35 + i * 30;
     const startY = h * 0.35;
-    commandBuffer.drawLine(startX, startY, startX - 60, startY + 120, 1, [40, 80, 120]);
+    renderer.drawLine(startX, startY, startX - 60, startY + 120, 1, [40, 80, 120]);
   }
 
   drawHudPanel(w - 360, h - 220, 300, 160, [120, 200, 255]);
-  commandBuffer.drawRect({ x: w - 320, y: h - 190, w: 240, h: 12 }, [60, 140, 200]);
-  commandBuffer.drawRect({ x: w - 320, y: h - 168, w: 180, h: 8 }, [120, 220, 255]);
-  commandBuffer.drawRect({ x: w - 320, y: h - 148, w: 200, h: 6 }, [80, 160, 220]);
+  renderer.drawRect({ x: w - 320, y: h - 190, w: 240, h: 12 }, [60, 140, 200]);
+  renderer.drawRect({ x: w - 320, y: h - 168, w: 180, h: 8 }, [120, 220, 255]);
+  renderer.drawRect({ x: w - 320, y: h - 148, w: 200, h: 6 }, [80, 160, 220]);
 
   for (let i = 0; i < 5; i++) {
     const cx = w - 330;
     const cy = h - 190 + i * 24;
-    commandBuffer.drawCircle(cx, cy, 6, [60, 150, 220], 24);
-    commandBuffer.drawCircle(cx, cy, 2, [200, 240, 255], 12);
+    renderer.drawCircle(cx, cy, 6, [60, 150, 220], 24);
+    renderer.drawCircle(cx, cy, 2, [200, 240, 255], 12);
   }
 
+  // Flush manually since we need to render to framebuffer first
+  const commandBuffer = renderer.getCommandBuffer();
   const frame = commandBuffer.flush();
   const start = performance.now();
 

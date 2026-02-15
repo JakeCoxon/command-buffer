@@ -1,4 +1,4 @@
-import { FontAtlas } from "./fontAtlas";
+import { FontAtlas } from "../../src/fontAtlas";
 
 export class DebugView {
   private canvas!: HTMLCanvasElement;

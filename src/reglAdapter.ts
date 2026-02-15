@@ -1,5 +1,6 @@
 import { FrameCommands, Command, DrawTexturedTrianglesCommand } from "./commands";
 import { Viewport } from "./types";
+import { type RenderAdapter } from "./adapter";
 
 type ReglLike = ((config: any) => any) & {
   prop: (name: string) => any;
@@ -11,7 +12,7 @@ type ReglAdapterOptions = {
   clear?: { color: [number, number, number, number] };
 };
 
-export class ReglAdapter {
+export class ReglAdapter implements RenderAdapter {
   private readonly drawShapes: any;
   private readonly drawText: any;
   private readonly textures: Map<string, any> = new Map();
@@ -23,6 +24,13 @@ export class ReglAdapter {
   constructor(private readonly regl: ReglLike, private readonly options: ReglAdapterOptions = {}) {
     this.drawShapes = this.createShapePipeline();
     this.drawText = this.createTextPipeline();
+  }
+
+  /**
+   * Get the number of draw calls in the last render
+   */
+  getDrawCalls(): number {
+    return this.drawCalls;
   }
 
   /**

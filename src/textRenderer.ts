@@ -1,4 +1,4 @@
-import { CommandBuffer } from "../../src/commandBuffer";
+import { CommandBuffer } from "./commandBuffer";
 import { FontAtlas, GlyphMetrics } from "./fontAtlas";
 
 /**
