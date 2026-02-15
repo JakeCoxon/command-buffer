@@ -152,8 +152,8 @@ export class FontAtlas {
   private ctx: CanvasRenderingContext2D;
   private root: AtlasNode;
   private glyphCache: Map<string, GlyphData> = new Map();
-  private expansionCallbacks: (() => void)[] = [];
-  private updateCallbacks: (() => void)[] = [];
+  private needsReRegister: boolean = false;  // Atlas expanded, texture must be recreated
+  private needsUpdate: boolean = false;      // New glyphs added, texture data needs updating
   
   private width: number;
   private height: number;
@@ -366,10 +366,9 @@ export class FontAtlas {
       );
     }
 
-    // Notify that texture needs updating
-    for (const callback of this.updateCallbacks) {
-      callback();
-    }
+    // Mark that texture needs updating (new glyph added)
+    // Note: If expansion happened, needsReRegister takes precedence
+    this.needsUpdate = true;
   }
 
   /**
@@ -472,24 +471,38 @@ export class FontAtlas {
       );
     }
 
-    // Notify listeners that atlas expanded
-    for (const callback of this.expansionCallbacks) {
-      callback();
-    }
+    // Mark that texture needs to be re-registered (atlas expanded)
+    // Re-registration takes precedence over update
+    this.needsReRegister = true;
+    this.needsUpdate = false; // Re-registration includes update, so clear this flag
   }
 
   /**
-   * Register a callback for when the atlas expands
+   * Check if texture needs to be re-registered (atlas expanded)
    */
-  onExpansion(callback: () => void): void {
-    this.expansionCallbacks.push(callback);
+  needsTextureReRegister(): boolean {
+    return this.needsReRegister;
   }
 
   /**
-   * Register a callback for when glyphs are added (texture needs updating)
+   * Check if texture needs updating (new glyphs added)
    */
-  onUpdate(callback: () => void): void {
-    this.updateCallbacks.push(callback);
+  needsTextureUpdate(): boolean {
+    return this.needsUpdate;
+  }
+
+  /**
+   * Mark texture as re-registered (clears the flag)
+   */
+  markTextureReRegistered(): void {
+    this.needsReRegister = false;
+  }
+
+  /**
+   * Mark texture as updated (clears the flag)
+   */
+  markTextureUpdated(): void {
+    this.needsUpdate = false;
   }
 
   /**

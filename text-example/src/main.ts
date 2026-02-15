@@ -39,17 +39,6 @@ const fontAtlas = new FontAtlas(
 // Register texture with ReglAdapter
 adapter.registerTexture(fontAtlas.getTextureId(), fontAtlas.getCanvas());
 
-// Handle atlas expansion - re-register texture when canvas resizes
-fontAtlas.onExpansion(() => {
-  adapter.unregisterTexture(fontAtlas.getTextureId());
-  adapter.registerTexture(fontAtlas.getTextureId(), fontAtlas.getCanvas());
-});
-
-// Handle texture updates when glyphs are added
-fontAtlas.onUpdate(() => {
-  adapter.updateTexture(fontAtlas.getTextureId(), fontAtlas.getCanvas());
-});
-
 // Create text renderer
 const textRenderer = new TextRenderer(commandBuffer, fontAtlas);
 
@@ -72,6 +61,16 @@ function resize() {
 }
 
 function drawFrame(time: number) {
+  // Check and update texture if needed
+  if (fontAtlas.needsTextureReRegister()) {
+    adapter.unregisterTexture(fontAtlas.getTextureId());
+    adapter.registerTexture(fontAtlas.getTextureId(), fontAtlas.getCanvas());
+    fontAtlas.markTextureReRegistered();
+  } else if (fontAtlas.needsTextureUpdate()) {
+    adapter.updateTexture(fontAtlas.getTextureId(), fontAtlas.getCanvas());
+    fontAtlas.markTextureUpdated();
+  }
+
   // Clear the buffer
   commandBuffer.clear([24, 24, 28, 255], 1);
 
