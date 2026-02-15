@@ -136,10 +136,12 @@ export type GlyphMetrics = {
  */
 type GlyphData = {
   metrics: GlyphMetrics;
-  x: number; // Position in atlas (pixels)
+  x: number; // Position in atlas (logical pixels)
   y: number;
-  width: number; // Size in atlas (pixels)
+  width: number; // Size in atlas (logical pixels, including padding)
   height: number;
+  renderX: number; // Actual rounded render X position (pixels)
+  renderY: number; // Actual rounded render Y position - baseline (pixels)
 };
 
 /**
@@ -339,14 +341,15 @@ export class FontAtlas {
 
     // Cache the glyph data
     // Store the bounding box including padding
-    // The actual glyph is rendered at (location.x + padding, location.y + padding + ascend)
-    // within a box of (location.x, location.y, paddedWidth, paddedHeight)
+    // Also store the actual rounded render position so UVs can match exactly
     this.glyphCache.set(glyph, {
       metrics,
       x: location.x,
       y: location.y,
       width: paddedWidth,  // Store full allocated width including padding
       height: paddedHeight, // Store full allocated height including padding
+      renderX, // Store rounded render X position
+      renderY, // Store rounded render Y position (baseline)
     });
 
     if (this.debugEnabled) {
@@ -387,16 +390,23 @@ export class FontAtlas {
     const canvasWidth = this.canvas.width;  // Actual canvas pixel width
     const canvasHeight = this.canvas.height; // Actual canvas pixel height
     
-    // The bounding box stored includes padding, but UVs should map to the glyph area
-    // The glyph is rendered at (location.x + padding, location.y + padding + ascend)
-    // So UVs should cover the glyph area, not the full bounding box
-    const glyphX = (data.x + this.padding) * this.pixelRatio;
-    const glyphY = (data.y + this.padding) * this.pixelRatio;
-    const glyphWidth = data.metrics.width * this.pixelRatio;
-    const glyphHeight = (data.metrics.ascend + data.metrics.descend) * this.pixelRatio;
+    // UV coordinates must match exactly where the glyph was rendered
+    // We stored the rounded render positions, so use those for precise UV mapping
+    // renderY is the baseline position, so calculate glyph bounds from there
+    const glyphX = data.renderX; // Already rounded
+    const glyphBaselineY = data.renderY; // Already rounded baseline position
+    const glyphWidth = Math.round(data.metrics.width * this.pixelRatio);
+    const glyphAscendPixels = Math.round(data.metrics.ascend * this.pixelRatio);
+    const glyphDescendPixels = Math.round(data.metrics.descend * this.pixelRatio);
+    
+    // Calculate glyph bounds from the baseline
+    // With alphabetic baseline, glyph extends from (baseline - ascend) to (baseline + descend)
+    const glyphY = glyphBaselineY - glyphAscendPixels; // Top of glyph
+    const glyphHeight = glyphAscendPixels + glyphDescendPixels; // Total glyph height
     
     // UV coordinates map to the glyph area (excluding padding)
     // This matches what we render on screen (metrics.width x metrics.ascend + metrics.descend)
+    // Use the exact rounded render positions for precise UV mapping
     const u1 = glyphX / canvasWidth;
     const v1 = glyphY / canvasHeight;
     const u2 = (glyphX + glyphWidth) / canvasWidth;
