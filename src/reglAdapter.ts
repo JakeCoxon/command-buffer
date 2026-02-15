@@ -34,6 +34,7 @@ export class ReglAdapter {
       mag: "linear",
       min: "linear",
       wrap: "clamp",
+      flipY: true, // Enable Y-flip: Canvas 2D (top-left) → WebGL (bottom-left)
     });
     this.textures.set(textureId, texture);
   }
@@ -46,6 +47,20 @@ export class ReglAdapter {
     if (texture) {
       texture.destroy();
       this.textures.delete(textureId);
+    }
+  }
+
+  /**
+   * Update a texture from a canvas (useful when canvas content changes)
+   */
+  updateTexture(textureId: string, canvas: HTMLCanvasElement) {
+    const texture = this.textures.get(textureId);
+    if (texture) {
+      // Regl textures can be updated by setting the data property
+      texture({ data: canvas });
+    } else {
+      // If texture doesn't exist, register it
+      this.registerTexture(textureId, canvas);
     }
   }
 
