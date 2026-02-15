@@ -1,5 +1,5 @@
 import createREGL from "regl";
-import { Renderer, ReglAdapter } from "../../src";
+import { Renderer, ReglAdapter, FrameCommands } from "../../src";
 
 const canvas = document.getElementById("canvas") as HTMLCanvasElement;
 const stats = document.getElementById("stats") as HTMLDivElement;
@@ -180,13 +180,21 @@ function drawFrame(time: number) {
     renderer.drawCircle(cx, cy, 2, [200, 240, 255], 12);
   }
 
-  // Flush manually since we need to render to framebuffer first
-  const commandBuffer = renderer.getCommandBuffer();
-  const frame = commandBuffer.flush();
+  // Draw some text (positioned to avoid overlapping with UI elements)
+  renderer.drawText("Command Buffer Demo", 260, 50, [200, 240, 255]);
+  renderer.drawText(`Time: ${(time / 1000).toFixed(1)}s`, 260, 80, [150, 200, 255]);
+  renderer.drawText(`FPS: ${(1000 / (time % 1000)).toFixed(0)}`, 260, 110, [120, 180, 240]);
+  
+  // Draw text in HUD panels (inside the panels)
+  renderer.drawText("STATUS", 152, 52, [80, 180, 255], 20);
+  renderer.drawText("RADAR", 182, h - 148, [30, 120, 90]);
+  renderer.drawText("SYSTEM", w - 418, h - 198, [120, 200, 255]);
+
   const start = performance.now();
 
+  let frame!: FrameCommands;
   regl({ framebuffer: sceneFbo })(() => {
-    adapter.render(frame);
+    frame = renderer.endFrame();
   });
 
   regl({
