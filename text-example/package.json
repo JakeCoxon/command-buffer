@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "fontkit": "^2.0.2",
     "regl": "^2.1.0"
   },
   "devDependencies": {

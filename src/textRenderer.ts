@@ -7,8 +7,15 @@ import { FontAtlas, GlyphMetrics } from "./fontAtlas";
 export class TextRenderer {
   constructor(
     private commandBuffer: CommandBuffer,
-    private fontAtlas: FontAtlas
+    public fontAtlas: FontAtlas
   ) {}
+
+  /**
+   * Set a new font atlas
+   */
+  setFontAtlas(fontAtlas: FontAtlas): void {
+    this.fontAtlas = fontAtlas;
+  }
 
   /**
    * Render a text string at the specified position

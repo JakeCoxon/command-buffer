@@ -8,9 +8,11 @@ export { type RenderAdapter } from "./adapter";
 export { ReglAdapter } from "./reglAdapter";
 
 // Text Rendering
-export { FontAtlas } from "./fontAtlas";
+export { type FontAtlas } from "./fontAtlas";
 export type { GlyphMetrics } from "./fontAtlas";
 export { TextRenderer } from "./textRenderer";
+export { CanvasFontAtlas } from "./font/canvasFontAtlas";
+export { FontkitFontAtlas } from "./font/fontkitFontAtlas";
 
 // High-level API
 export { Renderer } from "./renderer";

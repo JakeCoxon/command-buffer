@@ -1,16 +1,12 @@
 import { CommandBuffer } from "./commandBuffer";
 import { TextRenderer } from "./textRenderer";
-import { FontAtlas } from "./fontAtlas";
+import { type FontAtlas } from "./fontAtlas";
 import { type RenderAdapter } from "./adapter";
 import { Viewport, Color, Rect } from "./types";
 import { FrameCommands } from "./commands";
 
 export interface RendererOptions {
   viewport: Viewport;
-  fontFamily?: string;
-  fontSize?: number;
-  fontAtlasSize?: { width: number; height: number };
-  fontAtlasPadding?: number;
 }
 
 /**
@@ -19,36 +15,33 @@ export interface RendererOptions {
  */
 export class Renderer {
   private commandBuffer: CommandBuffer;
-  private fontAtlas: FontAtlas;
-  private textRenderer: TextRenderer;
+  public fontAtlas: FontAtlas | null = null;
+  private textRenderer: TextRenderer | null = null;
   private adapter: RenderAdapter;
+  private registeredTextureId: string | null = null;
 
   constructor(adapter: RenderAdapter, options: RendererOptions) {
     this.adapter = adapter;
     
     // Initialize CommandBuffer
     this.commandBuffer = new CommandBuffer(options.viewport);
-    
-    // Initialize FontAtlas
-    const pixelRatio = options.viewport.pixelRatio || 1;
-    this.fontAtlas = new FontAtlas(
-      options.fontFamily || "sans-serif",
-      options.fontSize || 16,
-      "font-atlas",
-      options.fontAtlasSize?.width || 256,
-      options.fontAtlasSize?.height || 256,
-      pixelRatio,
-      options.fontAtlasPadding || 1
-    );
-    
-    // Register font atlas texture with adapter
-    this.adapter.registerTexture(
-      this.fontAtlas.getTextureId(),
-      this.fontAtlas.getCanvas()
-    );
-    
-    // Initialize TextRenderer
-    this.textRenderer = new TextRenderer(this.commandBuffer, this.fontAtlas);
+  }
+
+  /**
+   * Set a new font atlas. This is a simple field setter, similar to context2d.font.
+   * Texture registration/unregistration is handled automatically in endFrame().
+   */
+  setFontAtlas(fontAtlas: FontAtlas | null): void {
+    this.fontAtlas = fontAtlas;
+    if (fontAtlas) {
+      if (!this.textRenderer) {
+        this.textRenderer = new TextRenderer(this.commandBuffer, fontAtlas);
+      } else {
+        this.textRenderer.setFontAtlas(fontAtlas);
+      }
+    } else {
+      this.textRenderer = null;
+    }
   }
 
   /**
@@ -68,20 +61,39 @@ export class Renderer {
    * @returns The flushed frame commands (useful for stats/debugging)
    */
   endFrame(): FrameCommands {
-    // Handle texture updates AFTER all drawing (including glyph additions) but BEFORE rendering
-    if (this.fontAtlas.needsTextureReRegister()) {
-      this.adapter.unregisterTexture(this.fontAtlas.getTextureId());
-      this.adapter.registerTexture(
-        this.fontAtlas.getTextureId(),
-        this.fontAtlas.getCanvas()
-      );
-      this.fontAtlas.markTextureReRegistered();
-    } else if (this.fontAtlas.needsTextureUpdate()) {
-      this.adapter.updateTexture(
-        this.fontAtlas.getTextureId(),
-        this.fontAtlas.getCanvas()
-      );
-      this.fontAtlas.markTextureUpdated();
+    // Handle font atlas texture registration and updates
+    if (this.fontAtlas) {
+      const currentTextureId = this.fontAtlas.getTextureId();
+      
+      // Check if font atlas has changed (texture ID changed)
+      if (this.registeredTextureId !== currentTextureId) {
+        // Unregister old texture if it exists
+        if (this.registeredTextureId !== null) {
+          this.adapter.unregisterTexture(this.registeredTextureId);
+        }
+        // Register new texture
+        this.adapter.registerTexture(
+          currentTextureId,
+          this.fontAtlas.getTexture() as HTMLCanvasElement
+        );
+        this.registeredTextureId = currentTextureId;
+      }
+      
+      // Handle texture updates AFTER all drawing (including glyph additions) but BEFORE rendering
+      if (this.fontAtlas.needsTextureReRegister()) {
+        this.adapter.unregisterTexture(this.fontAtlas.getTextureId());
+        this.adapter.registerTexture(
+          this.fontAtlas.getTextureId(),
+          this.fontAtlas.getTexture() as HTMLCanvasElement
+        );
+        this.fontAtlas.markTextureReRegistered();
+      } else if (this.fontAtlas.needsTextureUpdate()) {
+        this.adapter.updateTexture(
+          this.fontAtlas.getTextureId(),
+          this.fontAtlas.getTexture() as HTMLCanvasElement
+        );
+        this.fontAtlas.markTextureUpdated();
+      }
     }
     
     // Flush commands and render
@@ -134,6 +146,18 @@ export class Renderer {
     this.commandBuffer.drawRoundedRectOutline(rect, radius, lineWidth, color, segments);
   }
 
+  /**
+   * Draw a textured rectangle
+   */
+  drawTexturedRect(
+    rect: Rect,
+    uv: { u1: number; v1: number; u2: number; v2: number },
+    color: Color,
+    textureId: string
+  ): void {
+    this.commandBuffer.drawTexturedRect(rect, uv, color, textureId);
+  }
+
   // Delegate text methods to TextRenderer
   drawText(
     text: string,
@@ -142,6 +166,9 @@ export class Renderer {
     color?: [number, number, number, number?],
     lineHeight?: number
   ): void {
+    if (!this.textRenderer) {
+      throw new Error("Font atlas not set. Set renderer.fontAtlas before drawing text.");
+    }
     this.textRenderer.drawText(text, x, y, color, lineHeight);
   }
 
@@ -153,10 +180,16 @@ export class Renderer {
     color?: [number, number, number, number?],
     lineHeight?: number
   ): void {
+    if (!this.textRenderer) {
+      throw new Error("Font atlas not set. Set renderer.fontAtlas before drawing text.");
+    }
     this.textRenderer.drawTextWrapped(text, x, y, maxWidth, color, lineHeight);
   }
 
   measureText(text: string): number {
+    if (!this.textRenderer) {
+      throw new Error("Font atlas not set. Set renderer.fontAtlas before measuring text.");
+    }
     return this.textRenderer.measureText(text);
   }
 
@@ -170,14 +203,15 @@ export class Renderer {
   /**
    * Get access to underlying TextRenderer for advanced usage
    */
-  getTextRenderer(): TextRenderer {
+  getTextRenderer(): TextRenderer | null {
     return this.textRenderer;
   }
 
   /**
    * Get access to underlying FontAtlas for advanced usage
+   * @deprecated Use the fontAtlas property directly instead
    */
-  getFontAtlas(): FontAtlas {
+  getFontAtlas(): FontAtlas | null {
     return this.fontAtlas;
   }
 

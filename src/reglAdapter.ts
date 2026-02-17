@@ -43,8 +43,11 @@ export class ReglAdapter implements RenderAdapter {
       min: "linear",
       wrap: "clamp",
       flipY: true, // Enable Y-flip: Canvas 2D (top-left) → WebGL (bottom-left)
+      format: "rgba", // Explicitly set RGBA format to preserve alpha channel
+      premultiplyAlpha: false, // Don't premultiply - we want raw alpha values
     });
     this.textures.set(textureId, texture);
+    console.log(`[ReglAdapter] Registered texture '${textureId}': format=rgba, size=${canvas.width}x${canvas.height}, premultiplyAlpha=false`);
   }
 
   /**
@@ -65,7 +68,13 @@ export class ReglAdapter implements RenderAdapter {
     const texture = this.textures.get(textureId);
     if (texture) {
       // Regl textures can be updated by setting the data property
-      texture({ data: canvas });
+      // Preserve format and premultiplyAlpha settings
+      texture({ 
+        data: canvas,
+        format: "rgba",
+        premultiplyAlpha: false,
+      });
+      console.log(`[ReglAdapter] Updated texture '${textureId}': format=rgba, size=${canvas.width}x${canvas.height}`);
     } else {
       // If texture doesn't exist, register it
       this.registerTexture(textureId, canvas);
@@ -218,7 +227,8 @@ export class ReglAdapter implements RenderAdapter {
         void main() {
           vec4 texColor = texture2D(uTexture, vUv);
           // Multiply texture color by vertex color for tinting
-          gl_FragColor = texColor * vColor;
+          // Preserve alpha channel from texture for proper transparency/antialiasing
+          gl_FragColor = vec4(texColor.rgb * vColor.rgb, texColor.a * vColor.a);
         }
       `,
       attributes: {

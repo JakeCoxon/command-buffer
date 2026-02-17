@@ -4,12 +4,13 @@ export class DebugView {
   private canvas!: HTMLCanvasElement;
   private ctx!: CanvasRenderingContext2D;
   private selectedGlyph: string | null = null;
-  private scale: number = 1;
+  private scale: number = 4; // Default to 4x scale to see pixels clearly
   private showGrid: boolean = true;
   private showBoundingBoxes: boolean = true;
   private showCoordinates: boolean = true;
   private visible: boolean = false;
   private fontAtlas: FontAtlas | null = null;
+  private useNearestInterpolation: boolean = true; // Use nearest neighbor for pixel-perfect view
 
   // UI elements
   private panel: HTMLDivElement | null = null;
@@ -133,6 +134,38 @@ export class DebugView {
     coordsLabel.appendChild(document.createTextNode(" Show Coords"));
     controlsSection.appendChild(coordsLabel);
 
+    // Nearest Interpolation checkbox
+    const nearestLabel = document.createElement("label");
+    const nearestCheckbox = document.createElement("input");
+    nearestCheckbox.type = "checkbox";
+    nearestCheckbox.id = "debugNearestInterpolation";
+    nearestCheckbox.checked = true;
+    nearestLabel.appendChild(nearestCheckbox);
+    nearestLabel.appendChild(document.createTextNode(" Nearest Interpolation"));
+    controlsSection.appendChild(nearestLabel);
+    nearestCheckbox.addEventListener("change", (e) => {
+      this.useNearestInterpolation = (e.target as HTMLInputElement).checked;
+    });
+
+    // Scale input
+    const scaleLabel = document.createElement("label");
+    scaleLabel.textContent = "Scale: ";
+    const scaleInput = document.createElement("input");
+    scaleInput.type = "number";
+    scaleInput.id = "debugScale";
+    scaleInput.min = "0.5";
+    scaleInput.max = "16";
+    scaleInput.step = "0.5";
+    scaleInput.value = "4";
+    scaleLabel.appendChild(scaleInput);
+    controlsSection.appendChild(scaleLabel);
+    scaleInput.addEventListener("change", (e) => {
+      const value = parseFloat((e.target as HTMLInputElement).value);
+      if (!isNaN(value) && value > 0) {
+        this.setScale(value);
+      }
+    });
+
     // Log All button
     this.logAllButton = document.createElement("button");
     this.logAllButton.id = "debugLogAll";
@@ -202,7 +235,7 @@ export class DebugView {
     if (this.logAllButton) {
       this.logAllButton.addEventListener("click", () => {
         if (!this.fontAtlas) return;
-        const debugInfo = this.fontAtlas.getDebugInfo();
+        const debugInfo = this.fontAtlas.getDebugInfo() as any;
         console.log("[Atlas] All glyphs:", debugInfo);
         for (const glyph of debugInfo.glyphs) {
           console.log(
@@ -217,7 +250,7 @@ export class DebugView {
     if (this.exportButton) {
       this.exportButton.addEventListener("click", () => {
         if (!this.fontAtlas) return;
-        const atlasCanvas = this.fontAtlas.getCanvas();
+        const atlasCanvas = this.fontAtlas.getTexture() as HTMLCanvasElement;
         const link = document.createElement("a");
         link.download = "font-atlas.png";
         link.href = atlasCanvas.toDataURL();
@@ -275,8 +308,8 @@ export class DebugView {
   }
 
   private render(atlas: FontAtlas): void {
-    const debugInfo = atlas.getDebugInfo();
-    const atlasCanvas = atlas.getCanvas();
+    const debugInfo = atlas.getDebugInfo() as any;
+    const atlasCanvas = atlas.getTexture() as HTMLCanvasElement;
     const { logical, pixel } = debugInfo.dimensions;
 
     // Clear
@@ -287,25 +320,26 @@ export class DebugView {
     const maxHeight = this.canvas.height - 40;
     const scaleX = maxWidth / logical.width;
     const scaleY = maxHeight / logical.height;
-    const fitScale = Math.min(scaleX, scaleY, 4); // Max 4x zoom
+    const fitScale = Math.min(scaleX, scaleY, 8); // Max 8x zoom for better pixel viewing
     const displayScale = this.scale * fitScale;
 
     const displayWidth = logical.width * displayScale;
     const displayHeight = logical.height * displayScale;
-    const offsetX = (this.canvas.width - displayWidth) / 2;
-    const offsetY = (this.canvas.height - displayHeight) / 2;
+    // Position at top-left instead of centering
+    const offsetX = 20;
+    const offsetY = 20;
 
-    // Draw background
-    this.ctx.fillStyle = "#1a1a1a";
-    this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+    // Draw checkerboard background to show transparency
+    this.drawCheckerboard(offsetX, offsetY, displayWidth, displayHeight, 16 * displayScale);
 
     // Draw border
     this.ctx.strokeStyle = "#444";
     this.ctx.lineWidth = 2;
     this.ctx.strokeRect(offsetX - 1, offsetY - 1, displayWidth + 2, displayHeight + 2);
 
-    // Draw atlas canvas
+    // Draw atlas canvas with nearest neighbor interpolation for pixel-perfect view
     this.ctx.save();
+    this.ctx.imageSmoothingEnabled = !this.useNearestInterpolation;
     this.ctx.translate(offsetX, offsetY);
     this.ctx.scale(displayScale, displayScale);
     this.ctx.drawImage(atlasCanvas, 0, 0, logical.width, logical.height);
@@ -397,7 +431,7 @@ export class DebugView {
    * Find glyph at screen coordinates
    */
   findGlyphAt(atlas: FontAtlas, screenX: number, screenY: number): string | null {
-    const debugInfo = atlas.getDebugInfo();
+    const debugInfo = atlas.getDebugInfo() as any;
     const { logical } = debugInfo.dimensions;
 
     // Calculate scale
@@ -410,8 +444,9 @@ export class DebugView {
 
     const displayWidth = logical.width * displayScale;
     const displayHeight = logical.height * displayScale;
-    const offsetX = (this.canvas.width - displayWidth) / 2;
-    const offsetY = (this.canvas.height - displayHeight) / 2;
+    // Position at top-left instead of centering
+    const offsetX = 20;
+    const offsetY = 20;
 
     // Convert screen coordinates to atlas coordinates
     const atlasX = (screenX - offsetX) / displayScale;
@@ -432,10 +467,34 @@ export class DebugView {
     return null;
   }
 
+  /**
+   * Draw a checkerboard pattern to show transparency
+   */
+  private drawCheckerboard(x: number, y: number, width: number, height: number, tileSize: number): void {
+    const cols = Math.ceil(width / tileSize);
+    const rows = Math.ceil(height / tileSize);
+    
+    this.ctx.fillStyle = "#1a1a1a";
+    this.ctx.fillRect(x, y, width, height);
+    
+    this.ctx.fillStyle = "#2a2a2a";
+    for (let row = 0; row < rows; row++) {
+      for (let col = 0; col < cols; col++) {
+        if ((row + col) % 2 === 0) {
+          const tileX = x + col * tileSize;
+          const tileY = y + row * tileSize;
+          const tileW = Math.min(tileSize, width - (tileX - x));
+          const tileH = Math.min(tileSize, height - (tileY - y));
+          this.ctx.fillRect(tileX, tileY, tileW, tileH);
+        }
+      }
+    }
+  }
+
   private updateDebugInfo(): void {
     if (!this.visible || !this.fontAtlas) return;
 
-    const debugInfo = this.fontAtlas.getDebugInfo();
+    const debugInfo = this.fontAtlas.getDebugInfo() as any;
     
     if (this.atlasInfo) {
       this.atlasInfo.textContent = 
@@ -444,7 +503,7 @@ export class DebugView {
     }
 
     if (this.selectedGlyph) {
-      const glyph = debugInfo.glyphs.find((g) => g.char === this.selectedGlyph);
+      const glyph = debugInfo.glyphs.find((g: any) => g.char === this.selectedGlyph);
       if (glyph) {
         if (this.glyphInfo) {
           this.glyphInfo.textContent = `Selected: '${glyph.char}' (${glyph.char.charCodeAt(0)})`;

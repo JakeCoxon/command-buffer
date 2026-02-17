@@ -1,0 +1,34 @@
+{
+  "name": "command-buffer",
+  "version": "0.0.0",
+  "type": "module",
+  "description": "A command buffer system for efficient text and graphics rendering",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": {
+      "import": "./src/index.ts",
+      "types": "./src/index.ts"
+    }
+  },
+  "files": [
+    "src"
+  ],
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "fontkit": "^2.0.2"
+  },
+  "peerDependencies": {
+    "regl": "^2.1.0"
+  },
+  "devDependencies": {
+    "@types/fontkit": "^2.0.8",
+    "typescript": "^5.4.5"
+  },
+  "packageManager": "pnpm@9.12.3+sha512.cce0f9de9c5a7c95bef944169cc5dfe8741abfb145078c0d508b868056848a87c81e626246cb60967cbd7fd29a6c062ef73ff840d96b3c86c40ac92cf4a813ee",
+  "pnpm": {
+    "overrides": {}
+  }
+}

@@ -1,6 +1,8 @@
 import createREGL from "regl";
-import { Renderer, ReglAdapter } from "../../src";
+import { Renderer, ReglAdapter, CanvasFontAtlas, FontkitFontAtlas } from "../../src";
 import { DebugView } from "./debugView";
+
+import Lora from "./Lora-Medium.ttf?url";
 
 const canvas = document.getElementById("canvas") as HTMLCanvasElement;
 const stats = document.getElementById("stats") as HTMLDivElement;
@@ -16,14 +18,61 @@ const pixelRatio = window.devicePixelRatio || 1;
 const adapter = new ReglAdapter(regl as any);
 const renderer = new Renderer(adapter, {
   viewport: { rect: { x: 0, y: 0, w: 0, h: 0 }, pixelRatio },
-  fontFamily: "sans-serif",
-  fontSize: 24,
-  fontAtlasSize: { width: 256, height: 256 },
-  fontAtlasPadding: 1
 });
 
+// Create and set font atlas
+const fontAtlas = new CanvasFontAtlas(
+  "sans-serif",
+  24,
+  "font-atlas",
+  256,
+  256,
+  pixelRatio,
+  1
+);
+
+const fontKitAtlas = new FontkitFontAtlas(
+  Lora,
+  24,
+  "font-atlas",
+  256,
+  256,
+  pixelRatio,
+  1,
+  2 // 4x supersampling for better antialiasing
+);
+
+await fontKitAtlas.load();
+console.log("fontKitAtlas loaded", fontKitAtlas.getDebugInfo());
+
+// Create opacity gradient texture for transparency testing
+function createOpacityGradientTexture(): HTMLCanvasElement {
+  const canvas = document.createElement("canvas");
+  canvas.width = 256;
+  canvas.height = 256;
+  const ctx = canvas.getContext("2d", { alpha: true });
+  if (!ctx) {
+    throw new Error("Failed to get 2D context for gradient texture");
+  }
+  
+  // Create a gradient from fully opaque (left) to fully transparent (right)
+  const gradient = ctx.createLinearGradient(0, 0, canvas.width, 0);
+  gradient.addColorStop(0, "rgba(255, 255, 255, 1.0)");   // Fully opaque white
+  gradient.addColorStop(0.5, "rgba(255, 255, 255, 0.5)"); // 50% opacity
+  gradient.addColorStop(1, "rgba(255, 255, 255, 0.0)");    // Fully transparent
+  
+  // Fill with gradient
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  
+  return canvas;
+}
+
+const gradientTexture = createOpacityGradientTexture();
+adapter.registerTexture("opacity-gradient", gradientTexture);
+
 // Debug view setup
-const debugView = new DebugView(renderer.getFontAtlas());
+const debugView = new DebugView(renderer.fontAtlas!);
 
 function resize() {
   const width = window.innerWidth;
@@ -53,6 +102,22 @@ function drawFrame(time: number) {
   const textColor: [number, number, number, number] = [200, 220, 255, 255];
   const accentColor: [number, number, number, number] = [100, 200, 255, 255];
 
+  renderer.setFontAtlas(fontKitAtlas);
+
+  // Draw opacity gradient texture to test transparency
+  const gradientRect = {
+    x: w - 300,
+    y: 50,
+    w: 250,
+    h: 100,
+  };
+  renderer.drawTexturedRect(
+    gradientRect,
+    { u1: 0, v1: 0, u2: 1, v2: 1 }, // Full texture UVs
+    [255, 255, 255, 255], // White color (opacity comes from texture)
+    "opacity-gradient"
+  );
+
   // Title
   renderer.drawText("Font Atlas Text Rendering", 50, 50, accentColor);
 
@@ -70,7 +135,7 @@ function drawFrame(time: number) {
   renderer.drawText("Mixed: Hello, World! 42", 50, 330, textColor);
 
   // Performance stats
-  const glyphCount = renderer.getFontAtlas().getGlyphCount();
+  const glyphCount = renderer.fontAtlas?.getGlyphCount() || 0;
   renderer.drawText(
     `Cached Glyphs: ${glyphCount}`,
     50,
@@ -98,8 +163,8 @@ function drawFrame(time: number) {
   ].join("\n");
 
   // Update debug view
-  if (debugView) {
-    debugView.update(renderer.getFontAtlas());
+  if (debugView && renderer.fontAtlas) {
+    debugView.update(renderer.fontAtlas);
   }
 
   requestAnimationFrame(drawFrame);
