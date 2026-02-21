@@ -53,7 +53,10 @@ export class FontkitFontAtlas implements FontAtlas {
     this.pixelRatio = pixelRatio;
     
     // Render at supersampled resolution for better antialiasing
-    const renderPixelRatio = pixelRatio * this.supersample;
+    // Note: We use only supersample (not pixelRatio * supersample) because
+    // the viewport already converts logical pixels to screen pixels by pixelRatio.
+    // So we render at supersample resolution, and the viewport handles pixelRatio.
+    const renderPixelRatio = this.supersample;
     
     this.canvas = document.createElement("canvas");
     this.canvas.width = initialWidth * renderPixelRatio;
@@ -129,7 +132,9 @@ export class FontkitFontAtlas implements FontAtlas {
       this.font = loadedFont;
       this.unitsPerEm = this.font.unitsPerEm;
       // Scale includes supersampling for better antialiasing
-      this.scale = (this.fontSize * this.pixelRatio * this.supersample) / this.unitsPerEm;
+      // Note: We use only supersample (not pixelRatio * supersample) because
+      // the viewport already converts logical pixels to screen pixels by pixelRatio.
+      this.scale = (this.fontSize * this.supersample) / this.unitsPerEm;
       
       if (this.debugEnabled) {
         console.log(`[Atlas] Font loaded: unitsPerEm=${this.unitsPerEm}, scale=${this.scale}`);
@@ -275,8 +280,8 @@ export class FontkitFontAtlas implements FontAtlas {
         y: location.y,
         width: paddedWidth,
         height: paddedHeight,
-        renderX: Math.round((location.x + this.padding) * this.pixelRatio * this.supersample),
-        renderY: Math.round((location.y + this.padding + metrics.ascend) * this.pixelRatio * this.supersample),
+        renderX: Math.round((location.x + this.padding) * this.supersample),
+        renderY: Math.round((location.y + this.padding + metrics.ascend) * this.supersample),
       });
       this.needsUpdate = true;
       return;
@@ -292,8 +297,8 @@ export class FontkitFontAtlas implements FontAtlas {
         y: location.y,
         width: paddedWidth,
         height: paddedHeight,
-        renderX: Math.round((location.x + this.padding) * this.pixelRatio * this.supersample),
-        renderY: Math.round((location.y + this.padding + metrics.ascend) * this.pixelRatio * this.supersample),
+        renderX: Math.round((location.x + this.padding) * this.supersample),
+        renderY: Math.round((location.y + this.padding + metrics.ascend) * this.supersample),
       });
       this.needsUpdate = true;
       return;
@@ -304,7 +309,9 @@ export class FontkitFontAtlas implements FontAtlas {
     // We render the glyph in the center of this space, with padding around it
     // Use subpixel positioning for better antialiasing (don't round)
     // Apply supersampling to match the canvas resolution
-    const renderPixelRatio = this.pixelRatio * this.supersample;
+    // Note: We use only supersample (not pixelRatio * supersample) because
+    // the viewport already converts logical pixels to screen pixels by pixelRatio.
+    const renderPixelRatio = this.supersample;
     const renderX = (location.x + this.padding) * renderPixelRatio;
     const renderY = (location.y + this.padding + metrics.ascend) * renderPixelRatio;
     
@@ -330,15 +337,27 @@ export class FontkitFontAtlas implements FontAtlas {
     this.ctx.fillStyle = "#fff";
     
     // Debug: Log antialiasing settings before rendering
-    if (this.debugEnabled) {
-      const renderPixelRatio = this.pixelRatio * this.supersample;
+    if (true || this.debugEnabled) {
+      const renderPixelRatio = this.supersample;
       const expectedGlyphWidth = metrics.width * renderPixelRatio;
+      // Calculate expected size from font units to verify scale
+      const codePoint = glyph.codePointAt(0);
+      const glyphObj = codePoint !== undefined ? this.font?.glyphForCodePoint(codePoint) : null;
+      const advanceWidthUnits = glyphObj?.advanceWidth || 0;
+      const expectedWidthFromScale = advanceWidthUnits * this.scale;
+      // Get path bounding box to see actual rendered size
+      const pathBbox = path.bbox;
+      const pathWidthUnits = pathBbox ? (pathBbox.maxX - pathBbox.minX) : 0;
+      const pathWidthPixels = pathWidthUnits * this.scale;
       console.log(
         `[Atlas] Rendering glyph '${glyph}': ` +
         `metrics.width=${metrics.width} logical pixels, ` +
-        `will render as ${expectedGlyphWidth.toFixed(1)} pixels in texture (${renderPixelRatio.toFixed(2)}x), ` +
-        `will be drawn as ${metrics.width} logical pixels on screen, ` +
-        `scale=${this.scale.toFixed(4)}, ` +
+        `advanceWidthUnits=${advanceWidthUnits}, ` +
+        `pathWidthUnits=${pathWidthUnits.toFixed(1)}, ` +
+        `scale=${this.scale.toFixed(6)}, ` +
+        `expectedWidthFromScale=${expectedWidthFromScale.toFixed(1)} pixels, ` +
+        `pathWidthPixels=${pathWidthPixels.toFixed(1)} pixels, ` +
+        `expectedGlyphWidth=${expectedGlyphWidth.toFixed(1)} pixels (${renderPixelRatio.toFixed(2)}x), ` +
         `renderPos=(${renderX.toFixed(2)}, ${renderY.toFixed(2)})`
       );
     }
@@ -354,7 +373,8 @@ export class FontkitFontAtlas implements FontAtlas {
     this.ctx.translate(renderX, renderY);
     
     // Scale from font units to pixels, and flip y-axis
-    // Scale factor: (fontSize * pixelRatio * supersample) / unitsPerEm
+    // Scale factor: (fontSize * supersample) / unitsPerEm
+    // This converts font units to supersampled pixels (e.g., 2x for better antialiasing)
     // Negative y-scale flips the coordinate system
     this.ctx.scale(this.scale, -this.scale);
     
@@ -443,7 +463,9 @@ export class FontkitFontAtlas implements FontAtlas {
     // UV coordinates must match exactly where the glyph was rendered
     // renderY is the baseline position, so calculate glyph bounds from there
     // Note: renderX/renderY are in supersampled pixels, but UVs are normalized to canvas size
-    const renderPixelRatio = this.pixelRatio * this.supersample;
+    // Note: We use only supersample (not pixelRatio * supersample) because
+    // the viewport already converts logical pixels to screen pixels by pixelRatio.
+    const renderPixelRatio = this.supersample;
     const glyphX = data.renderX;
     const glyphBaselineY = data.renderY;
     const glyphWidth = Math.round(data.metrics.width * renderPixelRatio);
@@ -461,7 +483,7 @@ export class FontkitFontAtlas implements FontAtlas {
     const v2 = (glyphY + glyphHeight) / canvasHeight;
 
     if (this.debugEnabled) {
-      const renderPixelRatio = this.pixelRatio * this.supersample;
+      const renderPixelRatio = this.supersample;
       const boundingBoxX = data.x * renderPixelRatio;
       const boundingBoxY = data.y * renderPixelRatio;
       const boundingBoxWidth = data.width * renderPixelRatio;
@@ -598,10 +620,10 @@ export class FontkitFontAtlas implements FontAtlas {
           char,
           logical: { x: data.x, y: data.y, width: data.width, height: data.height },
           pixel: {
-            x: data.x * this.pixelRatio,
-            y: data.y * this.pixelRatio,
-            width: data.width * this.pixelRatio,
-            height: data.height * this.pixelRatio,
+            x: data.x * this.supersample,
+            y: data.y * this.supersample,
+            width: data.width * this.supersample,
+            height: data.height * this.supersample,
           },
           uv: glyphData.uv,
           metrics: glyphData.metrics,
