@@ -140,6 +140,19 @@ export type GlyphRenderData = {
 };
 
 /**
+ * JSON shape for a prebuilt font atlas (exported offline, loaded at runtime)
+ */
+export type PrebuiltAtlasJson = {
+  version: number;
+  textureId: string;
+  atlas: { width: number; height: number; pixelWidth: number; pixelHeight: number };
+  fontSize: number;
+  supersample: number;
+  padding: number;
+  glyphs: Record<string, GlyphRenderData>;
+};
+
+/**
  * Interface for font atlas implementations
  */
 export interface FontAtlas {

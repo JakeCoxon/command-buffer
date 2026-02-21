@@ -1,4 +1,4 @@
-import { AtlasNode, GlyphMetrics, GlyphRenderData, FontAtlas } from "../fontAtlas";
+import { AtlasNode, GlyphMetrics, GlyphRenderData, FontAtlas, PrebuiltAtlasJson } from "../fontAtlas";
 import * as fontkit from "fontkit";
 
 /**
@@ -15,22 +15,39 @@ type GlyphData = {
 };
 
 /**
+ * Minimal canvas interface for atlas rendering (browser HTMLCanvasElement or Node canvas)
+ */
+export interface AtlasCanvasLike {
+  width: number;
+  height: number;
+  getContext(contextId: "2d", options?: unknown): CanvasRenderingContext2D | null;
+}
+
+/**
+ * Optional factory for creating canvas and context (e.g. node-canvas in Node.js)
+ */
+export type CreateCanvasFactory = (
+  width: number,
+  height: number
+) => { canvas: AtlasCanvasLike; ctx: CanvasRenderingContext2D };
+
+/**
  * Font atlas for rendering text glyphs using fontkit
  */
 export class FontkitFontAtlas implements FontAtlas {
-  private canvas: HTMLCanvasElement;
+  private canvas: AtlasCanvasLike;
   private ctx: CanvasRenderingContext2D;
   private root: AtlasNode;
   private glyphCache: Map<string, GlyphData> = new Map();
   private needsReRegister: boolean = false;  // Atlas expanded, texture must be recreated
   private needsUpdate: boolean = false;      // New glyphs added, texture data needs updating
-  
+
   private width: number;
   private height: number;
   private pixelRatio: number;
   private debugEnabled: boolean = false;
   private padding: number;
-  
+
   private font: fontkit.Font | null = null; // fontkit Font object
   private fontPath: string;
   private unitsPerEm: number = 1000; // Default, will be set when font loads
@@ -42,35 +59,45 @@ export class FontkitFontAtlas implements FontAtlas {
     private textureId: string,
     initialWidth: number = 256,
     initialHeight: number = 256,
-    pixelRatio: number = window.devicePixelRatio || 1,
+    pixelRatio: number = typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1,
     padding: number = 1,
-    private supersample: number = 2 // Render at 4x resolution for better antialiasing
+    private supersample: number = 2, // Render at 4x resolution for better antialiasing
+    createCanvas?: CreateCanvasFactory
   ) {
     this.fontPath = fontPath;
     this.padding = padding;
     this.width = initialWidth;
     this.height = initialHeight;
     this.pixelRatio = pixelRatio;
-    
+
     // Render at supersampled resolution for better antialiasing
     // Note: We use only supersample (not pixelRatio * supersample) because
     // the viewport already converts logical pixels to screen pixels by pixelRatio.
     // So we render at supersample resolution, and the viewport handles pixelRatio.
     const renderPixelRatio = this.supersample;
-    
-    this.canvas = document.createElement("canvas");
-    this.canvas.width = initialWidth * renderPixelRatio;
-    this.canvas.height = initialHeight * renderPixelRatio;
-    
-    const ctx = this.canvas.getContext("2d", {
-      alpha: true,
-      desynchronized: false,
-      willReadFrequently: false,
-    });
-    if (!ctx) {
-      throw new Error("Failed to get 2D context for font atlas");
+
+    if (createCanvas) {
+      const { canvas, ctx } = createCanvas(
+        initialWidth * renderPixelRatio,
+        initialHeight * renderPixelRatio
+      );
+      this.canvas = canvas;
+      this.ctx = ctx;
+    } else {
+      const canvas = document.createElement("canvas");
+      canvas.width = initialWidth * renderPixelRatio;
+      canvas.height = initialHeight * renderPixelRatio;
+      const ctx = canvas.getContext("2d", {
+        alpha: true,
+        desynchronized: false,
+        willReadFrequently: false,
+      });
+      if (!ctx) {
+        throw new Error("Failed to get 2D context for font atlas");
+      }
+      this.canvas = canvas;
+      this.ctx = ctx;
     }
-    this.ctx = ctx;
     
     // Enable high-quality antialiasing
     this.ctx.imageSmoothingEnabled = true;
@@ -508,7 +535,7 @@ export class FontkitFontAtlas implements FontAtlas {
    * Expand the atlas by doubling its size
    */
   private expand(): void {
-    const renderPixelRatio = this.pixelRatio * this.supersample;
+    const renderPixelRatio = this.supersample;
     const imageData = this.ctx.getImageData(
       0,
       0,
@@ -584,7 +611,35 @@ export class FontkitFontAtlas implements FontAtlas {
    * Get the texture data for texture registration
    */
   getTexture(): HTMLCanvasElement | ArrayBuffer {
-    return this.canvas;
+    return this.canvas as HTMLCanvasElement | ArrayBuffer;
+  }
+
+  /**
+   * Export atlas metadata to the prebuilt JSON shape (for offline storage).
+   * Does not include the image; write the canvas to PNG separately (e.g. node-canvas toBuffer).
+   */
+  exportToJson(): PrebuiltAtlasJson {
+    const glyphs: Record<string, GlyphRenderData> = {};
+    for (const [char, _data] of this.glyphCache.entries()) {
+      const glyphData = this.getGlyphData(char);
+      if (glyphData) {
+        glyphs[char] = glyphData;
+      }
+    }
+    return {
+      version: 1,
+      textureId: this.textureId,
+      atlas: {
+        width: this.width,
+        height: this.height,
+        pixelWidth: this.canvas.width,
+        pixelHeight: this.canvas.height,
+      },
+      fontSize: this.fontSize,
+      supersample: this.supersample,
+      padding: this.padding,
+      glyphs,
+    };
   }
 
   /**

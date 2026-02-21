@@ -13,6 +13,7 @@ export type { GlyphMetrics } from "./fontAtlas";
 export { TextRenderer } from "./textRenderer";
 export { CanvasFontAtlas } from "./font/canvasFontAtlas";
 export { FontkitFontAtlas } from "./font/fontkitFontAtlas";
+export { PrebuiltFontAtlas } from "./font/prebuiltFontAtlas";
 
 // High-level API
 export { Renderer } from "./renderer";

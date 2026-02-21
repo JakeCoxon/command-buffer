@@ -1,8 +1,10 @@
 import createREGL from "regl";
-import { Renderer, ReglAdapter, CanvasFontAtlas, FontkitFontAtlas } from "../../src";
+import { Renderer, ReglAdapter, CanvasFontAtlas, FontkitFontAtlas, PrebuiltFontAtlas } from "../../src";
 import { DebugView } from "./debugView";
 
 import Lora from "./Lora-Medium.ttf?url";
+import atlasJsonUrl from "./atlas.json?url";
+import atlasPngUrl from "./atlas.png?url";
 
 const canvas = document.getElementById("canvas") as HTMLCanvasElement;
 const stats = document.getElementById("stats") as HTMLDivElement;
@@ -21,29 +23,33 @@ const renderer = new Renderer(adapter, {
 });
 
 // Create and set font atlas
-const fontAtlas = new CanvasFontAtlas(
-  "sans-serif",
-  24,
-  "font-atlas",
-  256,
-  256,
-  pixelRatio,
-  1
-);
+// const fontAtlas = new CanvasFontAtlas(
+//   "sans-serif",
+//   24,
+//   "font-atlas",
+//   256,
+//   256,
+//   pixelRatio,
+//   1
+// );
 
-const fontKitAtlas = new FontkitFontAtlas(
-  Lora,
-  24,
-  "font-atlas",
-  256,
-  256,
-  pixelRatio,
-  1,
-  2 // 4x supersampling for better antialiasing
-);
+// const fontKitAtlas = new FontkitFontAtlas(
+//   Lora,
+//   24,
+//   "font-atlas",
+//   256,
+//   256,
+//   pixelRatio,
+//   1,
+//   2 // 4x supersampling for better antialiasing
+// );
 
-await fontKitAtlas.load();
-console.log("fontKitAtlas loaded", fontKitAtlas.getDebugInfo());
+// await fontKitAtlas.load();
+// console.log("fontKitAtlas loaded", fontKitAtlas.getDebugInfo());
+
+// Load prebuilt font atlas (atlas.json + atlas.png in public/ from pnpm run build-font-atlas -- --out text-example/public)
+const fontAtlas = await PrebuiltFontAtlas.load(atlasJsonUrl, atlasPngUrl);
+console.log("PrebuiltFontAtlas loaded", fontAtlas.getDebugInfo());
 
 // Create opacity gradient texture for transparency testing
 function createOpacityGradientTexture(): HTMLCanvasElement {
@@ -102,7 +108,7 @@ function drawFrame(time: number) {
   const textColor: [number, number, number, number] = [200, 220, 255, 255];
   const accentColor: [number, number, number, number] = [100, 200, 255, 255];
 
-  renderer.setFontAtlas(fontKitAtlas);
+  renderer.setFontAtlas(fontAtlas);
 
   // Draw opacity gradient texture to test transparency
   const gradientRect = {
