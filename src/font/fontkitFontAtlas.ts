@@ -664,6 +664,7 @@ export class FontkitFontAtlas implements FontAtlas {
       char: string;
       logical: { x: number; y: number; width: number; height: number };
       pixel: { x: number; y: number; width: number; height: number };
+      content: { x: number; y: number; width: number; height: number };
       uv: { u1: number; v1: number; u2: number; v2: number };
       metrics: GlyphMetrics;
     }> = [];
@@ -671,6 +672,8 @@ export class FontkitFontAtlas implements FontAtlas {
     for (const [char, data] of this.glyphCache.entries()) {
       const glyphData = this.getGlyphData(char);
       if (glyphData) {
+        const { metrics } = glyphData;
+        const contentHeight = metrics.ascend + metrics.descend;
         glyphs.push({
           char,
           logical: { x: data.x, y: data.y, width: data.width, height: data.height },
@@ -680,8 +683,14 @@ export class FontkitFontAtlas implements FontAtlas {
             width: data.width * this.supersample,
             height: data.height * this.supersample,
           },
+          content: {
+            x: data.x + this.padding,
+            y: data.y + this.padding,
+            width: metrics.width,
+            height: contentHeight,
+          },
           uv: glyphData.uv,
-          metrics: glyphData.metrics,
+          metrics,
         });
       }
     }
@@ -692,6 +701,7 @@ export class FontkitFontAtlas implements FontAtlas {
         pixel: { width: this.canvas.width, height: this.canvas.height },
       },
       pixelRatio: this.pixelRatio,
+      padding: this.padding,
       glyphCount: this.glyphCache.size,
       glyphs,
       fontLoaded: this.font !== null,

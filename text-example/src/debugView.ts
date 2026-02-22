@@ -1,15 +1,19 @@
 import { FontAtlas } from "../../src/fontAtlas";
+import { Renderer } from "../../src/renderer";
 
 export class DebugView {
   private canvas!: HTMLCanvasElement;
   private ctx!: CanvasRenderingContext2D;
+
+  private renderer: Renderer;
+  private fontAtlas: FontAtlas | null = null;
+
   private selectedGlyph: string | null = null;
   private scale: number = 4; // Default to 4x scale to see pixels clearly
   private showGrid: boolean = true;
   private showBoundingBoxes: boolean = true;
   private showCoordinates: boolean = true;
   private visible: boolean = false;
-  private fontAtlas: FontAtlas | null = null;
   private useNearestInterpolation: boolean = true; // Use nearest neighbor for pixel-perfect view
 
   // UI elements
@@ -27,19 +31,14 @@ export class DebugView {
   private logAllButton: HTMLButtonElement | null = null;
   private exportButton: HTMLButtonElement | null = null;
 
-  constructor(fontAtlas: FontAtlas) {
-    this.fontAtlas = fontAtlas;
+  constructor(renderer: Renderer) {
+    this.renderer = renderer;
     
     // Create all UI elements
     this.createUI();
 
     // Setup event handlers
     this.setupEventHandlers();
-
-    // Handle clicks for glyph selection
-    this.canvas.addEventListener("click", (e) => {
-      this.handleClick(e);
-    });
   }
 
   private createUI(): void {
@@ -258,13 +257,17 @@ export class DebugView {
       });
     }
 
-    // Handle glyph selection
-    this.canvas.addEventListener("debugGlyphClick", ((e: CustomEvent) => {
+    // Handle clicks for glyph selection
+    this.canvas.addEventListener("click", (e) => {
+      const rect = this.canvas.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
       if (!this.fontAtlas) return;
-      const glyph = this.findGlyphAt(this.fontAtlas, e.detail.x, e.detail.y);
+      const glyph = this.findGlyphAt(this.fontAtlas, x, y);
       this.setSelectedGlyph(glyph);
       this.updateDebugInfo();
-    }) as EventListener);
+    });
+
   }
 
   setVisible(visible: boolean): void {
@@ -302,6 +305,7 @@ export class DebugView {
   }
 
   update(atlas: FontAtlas): void {
+    this.fontAtlas = atlas;
     if (!this.visible) return;
     this.render(atlas);
     this.updateDebugInfo();
@@ -365,24 +369,53 @@ export class DebugView {
       }
     }
 
-    // Draw bounding boxes and highlights
+    // Draw bounding boxes, padding, content rect, and baselines
     if (this.showBoundingBoxes) {
+      const padding = (debugInfo.padding as number) ?? 0;
       for (const glyph of debugInfo.glyphs) {
         const isSelected = glyph.char === this.selectedGlyph;
-        const x = offsetX + glyph.logical.x * displayScale;
-        const y = offsetY + glyph.logical.y * displayScale;
-        const w = glyph.logical.width * displayScale;
-        const h = glyph.logical.height * displayScale;
+        const hasContent = "content" in glyph && glyph.content;
 
-        // Draw bounding box
+        // Padded cell (full logical rect)
+        const cellX = offsetX + glyph.logical.x * displayScale;
+        const cellY = offsetY + glyph.logical.y * displayScale;
+        const cellW = glyph.logical.width * displayScale;
+        const cellH = glyph.logical.height * displayScale;
+
+        // Padding: draw padded cell with a distinct fill
+        if (padding > 0) {
+          this.ctx.fillStyle = "rgba(128, 128, 255, 0.15)";
+          this.ctx.fillRect(cellX, cellY, cellW, cellH);
+        }
         this.ctx.strokeStyle = isSelected ? "#0ff" : "#666";
         this.ctx.lineWidth = isSelected ? 2 : 1;
-        this.ctx.strokeRect(x, y, w, h);
+        this.ctx.strokeRect(cellX, cellY, cellW, cellH);
 
-        // Highlight selected glyph
+        // Content rect (actual glyph bounds, no padding)
+        if (hasContent) {
+          const cx = offsetX + glyph.content.x * displayScale;
+          const cy = offsetY + glyph.content.y * displayScale;
+          const cw = glyph.content.width * displayScale;
+          const ch = glyph.content.height * displayScale;
+          this.ctx.strokeStyle = isSelected ? "#0f8" : "#4a4";
+          this.ctx.lineWidth = 1;
+          this.ctx.strokeRect(cx, cy, cw, ch);
+
+          // Baseline (horizontal line at content top + ascend)
+          const baselineY = offsetY + (glyph.content.y + glyph.metrics.ascend) * displayScale;
+          this.ctx.strokeStyle = "rgba(255, 200, 0, 0.9)";
+          this.ctx.lineWidth = 1;
+          this.ctx.setLineDash([2, 2]);
+          this.ctx.beginPath();
+          this.ctx.moveTo(cx, baselineY);
+          this.ctx.lineTo(cx + cw, baselineY);
+          this.ctx.stroke();
+          this.ctx.setLineDash([]);
+        }
+
         if (isSelected) {
           this.ctx.fillStyle = "rgba(0, 255, 255, 0.1)";
-          this.ctx.fillRect(x, y, w, h);
+          this.ctx.fillRect(cellX, cellY, cellW, cellH);
         }
 
         // Draw coordinates
@@ -391,14 +424,14 @@ export class DebugView {
           this.ctx.font = "10px monospace";
           this.ctx.fillText(
             `${glyph.char} (${glyph.logical.x},${glyph.logical.y})`,
-            x + 2,
-            y + 12
+            cellX + 2,
+            cellY + 12
           );
           if (isSelected) {
             this.ctx.fillText(
               `UV: (${glyph.uv.u1.toFixed(3)}, ${glyph.uv.v1.toFixed(3)}) → (${glyph.uv.u2.toFixed(3)}, ${glyph.uv.v2.toFixed(3)})`,
-              x + 2,
-              y + 24
+              cellX + 2,
+              cellY + 24
             );
           }
         }
@@ -413,18 +446,6 @@ export class DebugView {
       10,
       20
     );
-  }
-
-  private handleClick(e: MouseEvent): void {
-    const rect = this.canvas.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-
-    // Dispatch custom event with click position
-    const event = new CustomEvent("debugGlyphClick", {
-      detail: { x, y },
-    });
-    this.canvas.dispatchEvent(event);
   }
 
   /**

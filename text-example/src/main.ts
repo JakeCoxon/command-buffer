@@ -78,7 +78,7 @@ const gradientTexture = createOpacityGradientTexture();
 adapter.registerTexture("opacity-gradient", gradientTexture);
 
 // Debug view setup
-const debugView = new DebugView(renderer.fontAtlas!);
+const debugView = new DebugView(renderer);
 
 function resize() {
   const width = window.innerWidth;

@@ -96,13 +96,14 @@ export class PrebuiltFontAtlas implements FontAtlas {
   }
 
   getDebugInfo(): object {
-    const { atlas, supersample } = this.json;
+    const { atlas, supersample, padding } = this.json;
     const pw = atlas.pixelWidth;
     const ph = atlas.pixelHeight;
     const glyphs: Array<{
       char: string;
       logical: { x: number; y: number; width: number; height: number };
       pixel: { x: number; y: number; width: number; height: number };
+      content: { x: number; y: number; width: number; height: number };
       uv: { u1: number; v1: number; u2: number; v2: number };
       metrics: GlyphMetrics;
     }> = [];
@@ -113,15 +114,28 @@ export class PrebuiltFontAtlas implements FontAtlas {
       const py = uv.v1 * ph;
       const pw2 = (uv.u2 - uv.u1) * pw;
       const ph2 = (uv.v2 - uv.v1) * ph;
+      const contentLogical = {
+        x: px / supersample,
+        y: py / supersample,
+        width: pw2 / supersample,
+        height: ph2 / supersample,
+      };
+      const contentHeight = metrics.ascend + metrics.descend;
       glyphs.push({
         char,
         logical: {
-          x: px / supersample,
-          y: py / supersample,
-          width: pw2 / supersample,
-          height: ph2 / supersample,
+          x: contentLogical.x - padding,
+          y: contentLogical.y - padding,
+          width: contentLogical.width + 2 * padding,
+          height: contentLogical.height + 2 * padding,
         },
         pixel: { x: px, y: py, width: pw2, height: ph2 },
+        content: {
+          x: contentLogical.x,
+          y: contentLogical.y,
+          width: metrics.width,
+          height: contentHeight,
+        },
         uv: data.uv,
         metrics,
       });
@@ -132,6 +146,7 @@ export class PrebuiltFontAtlas implements FontAtlas {
         logical: { width: atlas.width, height: atlas.height },
         pixel: { width: pw, height: ph },
       },
+      padding,
       glyphCount: glyphs.length,
       glyphs,
       prebuilt: true,
