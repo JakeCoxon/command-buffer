@@ -235,7 +235,9 @@ export class RecordingPlayer {
 
     const texture: Texture = {
       id: this.textureId,
-      getSource: () => this.textureAtlas!.canvas as HTMLCanvasElement,
+      source: this.textureAtlas!.canvas as HTMLCanvasElement,
+      version: 0,
+      lastUploadedVersion: 0,
     };
     commandBuffer.drawTexturedRect(
       {

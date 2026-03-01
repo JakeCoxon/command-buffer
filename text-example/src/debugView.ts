@@ -249,10 +249,10 @@ export class DebugView {
     if (this.exportButton) {
       this.exportButton.addEventListener("click", () => {
         if (!this.fontAtlas) return;
-        const atlasCanvas = this.fontAtlas.getTexture() as HTMLCanvasElement;
+        const atlasCanvas = this.fontAtlas.textureHandle.source;
         const link = document.createElement("a");
         link.download = "font-atlas.png";
-        link.href = atlasCanvas.toDataURL();
+        link.href = (atlasCanvas as HTMLCanvasElement).toDataURL();
         link.click();
       });
     }
@@ -313,7 +313,7 @@ export class DebugView {
 
   private render(atlas: FontAtlas): void {
     const debugInfo = atlas.getDebugInfo() as any;
-    const atlasCanvas = atlas.getTexture() as HTMLCanvasElement;
+    const atlasCanvas = atlas.textureHandle.source;
     const { logical, pixel } = debugInfo.dimensions;
 
     // Clear

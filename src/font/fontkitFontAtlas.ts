@@ -1,4 +1,4 @@
-import type { Texture } from "../types";
+import { createTextureHandle, type Texture, type TextureSource } from "../types";
 import { AtlasNode, GlyphMetrics, GlyphRenderData, FontAtlas, PrebuiltAtlasJson } from "../fontAtlas";
 import * as fontkit from "fontkit";
 
@@ -41,7 +41,6 @@ export class FontkitFontAtlas implements FontAtlas {
   private root: AtlasNode;
   private glyphCache: Map<string, GlyphData> = new Map();
   private needsReRegister: boolean = false;  // Atlas expanded, texture must be recreated
-  private needsUpdate: boolean = false;      // New glyphs added, texture data needs updating
 
   private width: number;
   private height: number;
@@ -54,10 +53,12 @@ export class FontkitFontAtlas implements FontAtlas {
   private unitsPerEm: number = 1000; // Default, will be set when font loads
   private scale: number = 1; // Scale factor from font units to pixels
 
+  readonly textureHandle: Texture;
+
   constructor(
     fontPath: string,
     private fontSize: number,
-    private textureId: string,
+    textureId: string,
     initialWidth: number = 256,
     initialHeight: number = 256,
     pixelRatio: number = typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1,
@@ -109,7 +110,13 @@ export class FontkitFontAtlas implements FontAtlas {
     this.ctx.fillStyle = "#fff";
     
     this.root = new AtlasNode(0, 0, initialWidth, initialHeight);
-    
+
+    this.textureHandle = createTextureHandle({
+      id: textureId,
+      source: this.canvas as TextureSource,
+      flipY: false,
+    });
+
     if (true || this.debugEnabled) {
       console.log(
         `[Atlas] Initialized: fontPath=${fontPath} ${fontSize}px, ` +
@@ -311,7 +318,7 @@ export class FontkitFontAtlas implements FontAtlas {
         renderX: Math.round((location.x + this.padding) * this.supersample),
         renderY: Math.round((location.y + this.padding + metrics.ascend) * this.supersample),
       });
-      this.needsUpdate = true;
+      this.textureHandle.version++;
       return;
     }
 
@@ -328,7 +335,7 @@ export class FontkitFontAtlas implements FontAtlas {
         renderX: Math.round((location.x + this.padding) * this.supersample),
         renderY: Math.round((location.y + this.padding + metrics.ascend) * this.supersample),
       });
-      this.needsUpdate = true;
+      this.textureHandle.version++;
       return;
     }
 
@@ -471,7 +478,7 @@ export class FontkitFontAtlas implements FontAtlas {
     }
 
     // Mark that texture needs updating (new glyph added)
-    this.needsUpdate = true;
+    this.textureHandle.version++;
   }
 
   /**
@@ -577,7 +584,8 @@ export class FontkitFontAtlas implements FontAtlas {
 
     // Mark that texture needs to be re-registered (atlas expanded)
     this.needsReRegister = true;
-    this.needsUpdate = false;
+    // Bump version so adapter re-uploads with new dimensions (source is same canvas, resized in place)
+    this.textureHandle.version++;
   }
 
   /**
@@ -588,31 +596,10 @@ export class FontkitFontAtlas implements FontAtlas {
   }
 
   /**
-   * Check if texture needs updating (new glyphs added)
-   */
-  needsTextureUpdate(): boolean {
-    return this.needsUpdate;
-  }
-
-  /**
    * Mark texture as re-registered (clears the flag)
    */
   markTextureReRegistered(): void {
     this.needsReRegister = false;
-  }
-
-  /**
-   * Mark texture as updated (clears the flag)
-   */
-  markTextureUpdated(): void {
-    this.needsUpdate = false;
-  }
-
-  /**
-   * Get the texture data for texture registration
-   */
-  getTexture(): HTMLCanvasElement | ArrayBuffer {
-    return this.canvas as HTMLCanvasElement | ArrayBuffer;
   }
 
   /**
@@ -629,7 +616,7 @@ export class FontkitFontAtlas implements FontAtlas {
     }
     return {
       version: 1,
-      textureId: this.textureId,
+      textureId: this.textureHandle.id,
       atlas: {
         width: this.width,
         height: this.height,
@@ -640,23 +627,6 @@ export class FontkitFontAtlas implements FontAtlas {
       supersample: this.supersample,
       padding: this.padding,
       glyphs,
-    };
-  }
-
-  /**
-   * Get the texture ID for CommandBuffer commands
-   */
-  getTextureId(): string {
-    return this.textureId;
-  }
-
-  getTextureHandle(): Texture {
-    return {
-      id: this.textureId,
-      getSource: () => this.getTexture() as HTMLCanvasElement,
-      needsUpdate: () => this.needsTextureUpdate(),
-      markUpdated: () => this.markTextureUpdated(),
-      flipY: false, // UVs are in canvas space (v=0 top), so don't flip on upload
     };
   }
 

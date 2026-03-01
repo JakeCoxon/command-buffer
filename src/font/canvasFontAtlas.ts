@@ -1,4 +1,4 @@
-import type { Texture } from "../types";
+import { createTextureHandle, type Texture } from "../types";
 import { AtlasNode, GlyphMetrics, GlyphRenderData, FontAtlas } from "../fontAtlas";
 
 /**
@@ -23,18 +23,19 @@ export class CanvasFontAtlas implements FontAtlas {
   private root: AtlasNode;
   private glyphCache: Map<string, GlyphData> = new Map();
   private needsReRegister: boolean = false;  // Atlas expanded, texture must be recreated
-  private needsUpdate: boolean = false;      // New glyphs added, texture data needs updating
-  
+
   private width: number;
   private height: number;
   private pixelRatio: number;
   private debugEnabled: boolean = false;
   private padding: number;
 
+  readonly textureHandle: Texture;
+
   constructor(
     private fontFamily: string,
     private fontSize: number,
-    private textureId: string,
+    textureId: string,
     initialWidth: number = 256,
     initialHeight: number = 256,
     pixelRatio: number = window.devicePixelRatio || 1,
@@ -63,7 +64,13 @@ export class CanvasFontAtlas implements FontAtlas {
     this.ctx.textAlign = "left";
     
     this.root = new AtlasNode(0, 0, initialWidth, initialHeight);
-    
+
+    this.textureHandle = createTextureHandle({
+      id: textureId,
+      source: this.canvas,
+      flipY: false,
+    });
+
     if (this.debugEnabled) {
       console.log(`[Atlas] Initialized: ${fontFamily} ${fontSize}px, canvas ${initialWidth}x${initialHeight} (${initialWidth * pixelRatio}x${initialHeight * pixelRatio} @ ${pixelRatio}x)`);
     }
@@ -237,8 +244,7 @@ export class CanvasFontAtlas implements FontAtlas {
     }
 
     // Mark that texture needs updating (new glyph added)
-    // Note: If expansion happened, needsReRegister takes precedence
-    this.needsUpdate = true;
+    this.textureHandle.version++;
   }
 
   /**
@@ -339,9 +345,9 @@ export class CanvasFontAtlas implements FontAtlas {
     }
 
     // Mark that texture needs to be re-registered (atlas expanded)
-    // Re-registration takes precedence over update
     this.needsReRegister = true;
-    this.needsUpdate = false; // Re-registration includes update, so clear this flag
+    // Bump version so adapter re-uploads with new dimensions (source is same canvas, resized in place)
+    this.textureHandle.version++;
   }
 
   /**
@@ -352,48 +358,10 @@ export class CanvasFontAtlas implements FontAtlas {
   }
 
   /**
-   * Check if texture needs updating (new glyphs added)
-   */
-  needsTextureUpdate(): boolean {
-    return this.needsUpdate;
-  }
-
-  /**
    * Mark texture as re-registered (clears the flag)
    */
   markTextureReRegistered(): void {
     this.needsReRegister = false;
-  }
-
-  /**
-   * Mark texture as updated (clears the flag)
-   */
-  markTextureUpdated(): void {
-    this.needsUpdate = false;
-  }
-
-  /**
-   * Get the texture data for texture registration
-   */
-  getTexture(): HTMLCanvasElement | ArrayBuffer {
-    return this.canvas;
-  }
-
-  /**
-   * Get the texture ID for CommandBuffer commands
-   */
-  getTextureId(): string {
-    return this.textureId;
-  }
-
-  getTextureHandle(): Texture {
-    return {
-      id: this.textureId,
-      getSource: () => this.canvas,
-      needsUpdate: () => this.needsTextureUpdate(),
-      markUpdated: () => this.markTextureUpdated(),
-      flipY: false, // UVs are in canvas space (v=0 top), so don't flip on upload
-    };
   }
 
   /**

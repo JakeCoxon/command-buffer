@@ -163,12 +163,8 @@ export interface FontAtlas {
   addGlyph(glyph: string): void;
   getGlyphData(glyph: string): GlyphRenderData | null;
   needsTextureReRegister(): boolean;
-  needsTextureUpdate(): boolean;
   markTextureReRegistered(): void;
-  markTextureUpdated(): void;
-  getTexture(): HTMLCanvasElement | ArrayBuffer;
-  getTextureId(): string;
-  getTextureHandle(): Texture;
+  readonly textureHandle: Texture;
   getGlyphCount(): number;
   getDebugInfo(): object;
 }

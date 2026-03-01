@@ -1,5 +1,5 @@
 import createREGL from "regl";
-import { Renderer, ReglAdapter, CanvasFontAtlas, FontkitFontAtlas, PrebuiltFontAtlas, type Texture } from "../../src";
+import { Renderer, ReglAdapter, CanvasFontAtlas, FontkitFontAtlas, PrebuiltFontAtlas, createTextureHandle } from "../../src";
 import type { FontAtlas } from "../../src/fontAtlas";
 import { DebugView } from "./debugView";
 
@@ -75,11 +75,10 @@ function createOpacityGradientTexture(): HTMLCanvasElement {
 }
 
 const gradientCanvas = createOpacityGradientTexture();
-const gradientTexture: Texture = {
+const gradientTexture = createTextureHandle({
   id: "opacity-gradient",
-  getSource: () => gradientCanvas,
-  needsUpdate: () => false,
-};
+  source: gradientCanvas,
+});
 
 // Debug view setup
 const debugView = new DebugView(renderer);

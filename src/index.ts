@@ -2,6 +2,7 @@
 export { CommandBuffer } from "./commandBuffer";
 export type { FrameCommands, Command } from "./commands";
 export type { Viewport, Rect, Color, Texture } from "./types";
+export { createTextureHandle } from "./types";
 
 // Adapters
 export { type RenderAdapter } from "./adapter";

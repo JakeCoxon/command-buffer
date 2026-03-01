@@ -1,4 +1,4 @@
-import type { Texture } from "../types";
+import { createTextureHandle, type Texture } from "../types";
 import type {
   FontAtlas,
   GlyphMetrics,
@@ -12,16 +12,20 @@ import type {
  */
 export class PrebuiltFontAtlas implements FontAtlas {
   private readonly glyphs: Record<string, GlyphRenderData>;
-  private readonly textureId: string;
   private readonly textureCanvas: HTMLCanvasElement;
+  readonly textureHandle: Texture;
   private readonly json: PrebuiltAtlasJson;
   private debugEnabled: boolean = false;
 
   constructor(json: PrebuiltAtlasJson, textureCanvas: HTMLCanvasElement) {
     this.json = json;
     this.glyphs = { ...json.glyphs };
-    this.textureId = json.textureId;
     this.textureCanvas = textureCanvas;
+    this.textureHandle = createTextureHandle({
+      id: json.textureId,
+      source: this.textureCanvas,
+      flipY: true,
+    });
   }
 
   /**
@@ -77,28 +81,7 @@ export class PrebuiltFontAtlas implements FontAtlas {
     return false;
   }
 
-  needsTextureUpdate(): boolean {
-    return false;
-  }
-
   markTextureReRegistered(): void {}
-  markTextureUpdated(): void {}
-
-  getTexture(): HTMLCanvasElement | ArrayBuffer {
-    return this.textureCanvas;
-  }
-
-  getTextureId(): string {
-    return this.textureId;
-  }
-
-  getTextureHandle(): Texture {
-    return {
-      id: this.textureId,
-      getSource: () => this.textureCanvas,
-      needsUpdate: () => false,
-    };
-  }
 
   getGlyphCount(): number {
     return Object.keys(this.glyphs).length;

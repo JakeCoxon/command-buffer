@@ -41,16 +41,17 @@ export class ReglAdapter implements RenderAdapter {
   }
 
   /**
-   * Ensure a texture is uploaded: register if new, or update if already registered and needs update.
+   * Ensure a texture is uploaded: register if new, or update if already registered and version !== lastUploadedVersion.
    * flipY: true (default) = canvas top → texture v=1; flipY: false = canvas top → texture v=0.
    */
   uploadTexture(texture: Texture) {
-    const canvas = texture.getSource();
+    const source = texture.source;
     const flipY = texture.flipY !== false;
     const existing = this.textures.get(texture.id);
+    const needsUpload = texture.version !== texture.lastUploadedVersion;
     if (!existing) {
       const reglTex = this.regl.texture({
-        data: canvas,
+        data: source,
         mag: "linear",
         min: "linear",
         wrap: "clamp",
@@ -59,17 +60,17 @@ export class ReglAdapter implements RenderAdapter {
         premultiplyAlpha: false,
       });
       this.textures.set(texture.id, reglTex);
-      texture.markUpdated?.();
-      console.log(`[ReglAdapter] Registered texture '${texture.id}': format=rgba, size=${canvas.width}x${canvas.height}, flipY=${flipY}`);
-    } else if (!texture.needsUpdate || texture.needsUpdate()) {
+      texture.lastUploadedVersion = texture.version;
+      console.log(`[ReglAdapter] Registered texture '${texture.id}': format=rgba, size=${"width" in source ? source.width : 0}x${"height" in source ? source.height : 0}, flipY=${flipY}`);
+    } else if (needsUpload) {
       existing({
-        data: canvas,
+        data: source,
         format: "rgba",
         premultiplyAlpha: false,
         flipY,
       });
-      texture.markUpdated?.();
-      console.log(`[ReglAdapter] Updated texture '${texture.id}': format=rgba, size=${canvas.width}x${canvas.height}, flipY=${flipY}`);
+      texture.lastUploadedVersion = texture.version;
+      console.log(`[ReglAdapter] Updated texture '${texture.id}': format=rgba, size=${"width" in source ? source.width : 0}x${"height" in source ? source.height : 0}, flipY=${flipY}`);
     }
   }
 

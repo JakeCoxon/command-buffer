@@ -130,7 +130,7 @@ async function main(): Promise<void> {
   fs.writeFileSync(jsonPath, JSON.stringify(json, null, 2), "utf8");
   console.log(`Wrote ${jsonPath} (${Object.keys(json.glyphs).length} glyphs)`);
 
-  const texture = atlas.getTexture() as { toBuffer?(fmt: string): Buffer };
+  const texture = atlas.textureHandle.source as { toBuffer?(fmt: string): Buffer };
   if (texture && typeof texture.toBuffer === "function") {
     const pngPath = path.join(outDir, "atlas.png");
     const pngBuffer = texture.toBuffer("image/png");

@@ -29,7 +29,7 @@ export class TextRenderer {
     lineHeight?: number,
     scale: number = 1
   ): void {
-    const texture = this.fontAtlas.getTextureHandle();
+    const texture = this.fontAtlas.textureHandle;
     let currentX = x;
     const currentY = y;
 
