@@ -5,15 +5,16 @@ import { FontAtlas, GlyphMetrics } from "./fontAtlas";
  * Helper class for rendering text using FontAtlas and CommandBuffer
  */
 export class TextRenderer {
+  public fontAtlas: FontAtlas | null = null;
+
   constructor(
     private commandBuffer: CommandBuffer,
-    public fontAtlas: FontAtlas
   ) {}
 
   /**
    * Set a new font atlas
    */
-  setFontAtlas(fontAtlas: FontAtlas): void {
+  setFontAtlas(fontAtlas: FontAtlas | null): void {
     this.fontAtlas = fontAtlas;
   }
 
@@ -29,6 +30,10 @@ export class TextRenderer {
     lineHeight?: number,
     scale: number = 1
   ): void {
+    if (!this.fontAtlas) {
+      throw new Error("Font atlas not set. Set renderer.fontAtlas before drawing text.");
+    }
+
     const texture = this.fontAtlas.textureHandle;
     let currentX = x;
     const currentY = y;
@@ -104,6 +109,9 @@ export class TextRenderer {
    * Get max ascend and descend for a string (for drawing metric lines).
    */
   getLineMetrics(text: string): { ascend: number; descend: number } {
+    if (!this.fontAtlas) {
+      throw new Error("Font atlas not set. Set renderer.fontAtlas before getting line metrics.");
+    }
     let ascend = 0;
     let descend = 0;
     for (const char of text) {
@@ -125,6 +133,9 @@ export class TextRenderer {
    * Measure the width of a text string
    */
   measureText(text: string): number {
+    if (!this.fontAtlas) {
+      throw new Error("Font atlas not set. Set renderer.fontAtlas before measuring text.");
+    }
     let width = 0;
     for (const char of text) {
       if (char.charCodeAt(0) === 10 || char.charCodeAt(0) === 13) {
@@ -144,6 +155,9 @@ export class TextRenderer {
    */
   private getLineHeight(): number {
     // Use a test character to get line height
+    if (!this.fontAtlas) {
+      throw new Error("Font atlas not set. Set renderer.fontAtlas before getting line height.");
+    }
     this.fontAtlas.addGlyph("A");
     const glyphData = this.fontAtlas.getGlyphData("A");
     if (glyphData) {

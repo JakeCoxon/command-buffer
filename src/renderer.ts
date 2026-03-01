@@ -16,7 +16,7 @@ export interface RendererOptions {
 export class Renderer {
   private commandBuffer: CommandBuffer;
   public fontAtlas: FontAtlas | null = null;
-  private textRenderer: TextRenderer | null = null;
+  private textRenderer: TextRenderer;
   private adapter: RenderAdapter;
 
   constructor(adapter: RenderAdapter, options: RendererOptions) {
@@ -24,6 +24,7 @@ export class Renderer {
     
     // Initialize CommandBuffer
     this.commandBuffer = new CommandBuffer(options.viewport);
+    this.textRenderer = new TextRenderer(this.commandBuffer);
   }
 
   /**
@@ -32,15 +33,7 @@ export class Renderer {
    */
   setFontAtlas(fontAtlas: FontAtlas | null): void {
     this.fontAtlas = fontAtlas;
-    if (fontAtlas) {
-      if (!this.textRenderer) {
-        this.textRenderer = new TextRenderer(this.commandBuffer, fontAtlas);
-      } else {
-        this.textRenderer.setFontAtlas(fontAtlas);
-      }
-    } else {
-      this.textRenderer = null;
-    }
+    this.textRenderer.setFontAtlas(fontAtlas);
   }
 
   /**
@@ -139,21 +132,21 @@ export class Renderer {
     color?: [number, number, number, number?],
     lineHeight?: number
   ): void {
-    if (!this.textRenderer) {
+    if (!this.fontAtlas) {
       throw new Error("Font atlas not set. Set renderer.fontAtlas before drawing text.");
     }
     this.textRenderer.drawTextWrapped(text, x, y, maxWidth, color, lineHeight);
   }
 
   measureText(text: string): number {
-    if (!this.textRenderer) {
+    if (!this.fontAtlas) {
       throw new Error("Font atlas not set. Set renderer.fontAtlas before measuring text.");
     }
     return this.textRenderer.measureText(text);
   }
 
   getLineMetrics(text: string): { ascend: number; descend: number } {
-    if (!this.textRenderer) {
+    if (!this.fontAtlas) {
       throw new Error("Font atlas not set. Set renderer.fontAtlas before getting line metrics.");
     }
     return this.textRenderer.getLineMetrics(text);
@@ -169,7 +162,7 @@ export class Renderer {
   /**
    * Get access to underlying TextRenderer for advanced usage
    */
-  getTextRenderer(): TextRenderer | null {
+  getTextRenderer(): TextRenderer {
     return this.textRenderer;
   }
 

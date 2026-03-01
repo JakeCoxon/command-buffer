@@ -43,8 +43,9 @@ export class CommandBuffer {
 
   flush(): FrameCommands {
     const vertices = new Float32Array(this.vertices);
+    const rawCommandCount = this.commands.length;
     const commands = this.batchCommands(this.commands);
-    const result: FrameCommands = { vertices, commands };
+    const result: FrameCommands = { vertices, commands, rawCommandCount };
     result.usedTextures = new Map(this.usedTextures);
 
     if (this.texturedVertices.length > 0) {

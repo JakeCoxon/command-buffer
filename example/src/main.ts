@@ -1,5 +1,5 @@
 import createREGL from "regl";
-import { Renderer, ReglAdapter, FrameCommands } from "../../src";
+import { Renderer, ReglAdapter, CanvasFontAtlas, FrameCommands } from "../../src";
 
 const canvas = document.getElementById("canvas") as HTMLCanvasElement;
 const stats = document.getElementById("stats") as HTMLDivElement;
@@ -8,8 +8,20 @@ const regl = createREGL({ canvas });
 const pixelRatio = window.devicePixelRatio || 1;
 const adapter = new ReglAdapter(regl as any);
 const renderer = new Renderer(adapter, {
-  viewport: { rect: { x: 0, y: 0, w: 0, h: 0 }, pixelRatio }
+  viewport: { rect: { x: 0, y: 0, w: 0, h: 0 }, pixelRatio },
 });
+
+// Font atlas for text (system font, no assets required)
+const fontAtlas = new CanvasFontAtlas(
+  "system-ui",
+  16,
+  "example-font-atlas",
+  256,
+  256,
+  pixelRatio,
+  1
+);
+renderer.setFontAtlas(fontAtlas);
 
 const sceneFbo = regl.framebuffer({ width: 1, height: 1 });
 
@@ -207,9 +219,13 @@ function drawFrame(time: number) {
   const renderMs = end - start;
   const vertexCount = frame.vertices.length / 6;
 
+  const cmdBefore = frame.rawCommandCount ?? frame.commands.length;
+  const cmdAfter = frame.commands.length;
   stats.textContent = [
     `vertices: ${vertexCount}`,
-    `commands: ${frame.commands.length}`,
+    `commands: ${cmdBefore} → ${cmdAfter}`,
+    `draw calls: ${adapter.getDrawCalls()}`,
+    `textures: ${adapter.getTextureCount()}`,
     `render: ${renderMs.toFixed(2)} ms`,
   ].join("\n");
 

@@ -46,5 +46,7 @@ export type FrameCommands = {
   vertices: Float32Array;
   texturedVertices?: Float32Array;
   commands: Command[];
+  /** Number of commands before batching (for stats). Omitted if not tracked. */
+  rawCommandCount?: number;
   usedTextures?: Map<string, Texture>;
 };
