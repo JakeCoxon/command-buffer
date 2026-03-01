@@ -2,6 +2,7 @@
 export { CommandBuffer } from "./commandBuffer";
 export { batchCommands } from "./batchCommands";
 export type { FrameCommands, Command } from "./commands";
+export type { DrawPacket, PackedKey, DrawPacketGeometry, DrawPacketBindings, DrawPacketDrawParams } from "./drawPacket";
 export type { Viewport, Rect, Color, Texture } from "./types";
 export { createTextureHandle } from "./types";
 

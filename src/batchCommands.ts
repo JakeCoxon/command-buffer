@@ -1,80 +1,71 @@
-import {
-  Command,
-  DrawTrianglesCommand,
-  DrawTexturedTrianglesCommand,
-} from "./commands";
+import type { PackedKey } from "./drawPacket";
 
 /**
- * Batches consecutive draw commands of the same type.
- * State-changing commands (setViewport, clear, pushLayer, popLayer) pass through as-is.
- * Consecutive drawTriangles are merged; consecutive drawTexturedTriangles with the same textureId are merged.
+ * Generic batcher: island runs (contiguous) → stable-bucket by orderHint → stable-bucket by batch.
+ * Backend-agnostic; only uses key fields. Policy (key construction) lives in the adapter.
+ *
+ * Invariants:
+ * - **Islands**: Contiguous runs only. If the stream is island 0, 1, 0, we get three blocks (we do not merge the two island-0 runs).
+ * - **OrderHint / batch**: Bucket-based stable grouping within each island run. All packets with the same orderHint in that island are batched together (in order of first appearance of orderHint), then within each orderHint bucket we stable-group by batch. So interleaved orderHints (0, 1, 0, 1) become buckets 0(…), 1(…), giving real batching instead of four tiny runs.
+ *
+ * No .slice(); we operate on index ranges and push packets directly into group arrays.
+ *
+ * @param packets - Array of draw packets (e.g. DrawPacket)
+ * @param keys - PackedKey for each packet (same length as packets)
+ * @returns Array of groups; each group is packets with same batch within same orderHint bucket within same island run
  */
-export function batchCommands(commands: Command[]): Command[] {
-  const batched: Command[] = [];
-  let i = 0;
-
-  while (i < commands.length) {
-    const command = commands[i];
-
-    // State-changing commands break batching and are added as-is
-    if (
-      command.type === "setViewport" ||
-      command.type === "clear" ||
-      command.type === "pushLayer" ||
-      command.type === "popLayer"
-    ) {
-      batched.push(command);
-      i++;
-      continue;
-    }
-
-    // Collect consecutive drawTriangles commands
-    if (command.type === "drawTriangles") {
-      let batchOffset = command.offset;
-      let batchCount = command.count;
-      i++;
-
-      // Continue collecting consecutive drawTriangles commands
-      while (i < commands.length && commands[i].type === "drawTriangles") {
-        const nextCommand = commands[i] as DrawTrianglesCommand;
-        // Vertices are contiguous, so we can combine by summing counts
-        batchCount += nextCommand.count;
-        i++;
-      }
-
-      // Add the batched drawTriangles command
-      batched.push({ type: "drawTriangles", offset: batchOffset, count: batchCount });
-      continue;
-    }
-
-    // Collect consecutive drawTexturedTriangles commands with same texture
-    if (command.type === "drawTexturedTriangles") {
-      const texturedCommand = command as DrawTexturedTrianglesCommand;
-      let batchOffset = texturedCommand.offset;
-      let batchCount = texturedCommand.count;
-      const textureId = texturedCommand.textureId;
-      i++;
-
-      // Continue collecting consecutive drawTexturedTriangles commands with same texture
-      while (
-        i < commands.length &&
-        commands[i].type === "drawTexturedTriangles" &&
-        (commands[i] as DrawTexturedTrianglesCommand).textureId === textureId
-      ) {
-        const nextCommand = commands[i] as DrawTexturedTrianglesCommand;
-        batchCount += nextCommand.count;
-        i++;
-      }
-
-      // Add the batched drawTexturedTriangles command
-      batched.push({ type: "drawTexturedTriangles", offset: batchOffset, count: batchCount, textureId });
-      continue;
-    }
-
-    // Unknown command type - add as-is
-    batched.push(command);
-    i++;
+export function batchCommands<T>(packets: T[], keys: PackedKey[]): T[][] {
+  if (packets.length === 0) return [];
+  if (packets.length !== keys.length) {
+    throw new Error(`batchCommands: packets.length (${packets.length}) !== keys.length (${keys.length})`);
   }
 
-  return batched;
+  const out: T[][] = [];
+  let i = 0;
+
+  while (i < packets.length) {
+    const island = keys[i].island;
+
+    // Collect one island run (contiguous)
+    let j = i;
+    while (j < packets.length && keys[j].island === island) j++;
+
+    // Within [i, j): stable-bucket by orderHint, then by batch (no slicing)
+    const orderMap = new Map<
+      number,
+      { batches: Map<number, T[]>; batchOrder: number[] }
+    >();
+    const orderOrder: number[] = [];
+
+    for (let k = i; k < j; k++) {
+      const o = keys[k].orderHint;
+      let entry = orderMap.get(o);
+      if (!entry) {
+        entry = { batches: new Map(), batchOrder: [] };
+        orderMap.set(o, entry);
+        orderOrder.push(o);
+      }
+
+      const b = keys[k].batch;
+      let g = entry.batches.get(b);
+      if (!g) {
+        g = [];
+        entry.batches.set(b, g);
+        entry.batchOrder.push(b);
+      }
+      g.push(packets[k]);
+    }
+
+    // Emit in stable orderHint order, then stable batch order
+    for (const o of orderOrder) {
+      const entry = orderMap.get(o)!;
+      for (const b of entry.batchOrder) {
+        out.push(entry.batches.get(b)!);
+      }
+    }
+
+    i = j;
+  }
+
+  return out;
 }
