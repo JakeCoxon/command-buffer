@@ -1,5 +1,6 @@
 // Core
 export { CommandBuffer } from "./commandBuffer";
+export { batchCommands } from "./batchCommands";
 export type { FrameCommands, Command } from "./commands";
 export type { Viewport, Rect, Color, Texture } from "./types";
 export { createTextureHandle } from "./types";

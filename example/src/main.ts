@@ -191,7 +191,7 @@ function drawFrame(time: number) {
 
   sciFiStats.lastVertexCount = frame.vertices.length / 6;
   sciFiStats.lastCmdBefore = frame.rawCommandCount ?? frame.commands.length;
-  sciFiStats.lastCmdAfter = frame.commands.length;
+  sciFiStats.lastCmdAfter = adapter.getDrawCalls();
   sciFiStats.lastRenderMs = end - start;
 
   regl({

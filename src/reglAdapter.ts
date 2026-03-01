@@ -1,4 +1,5 @@
 import { FrameCommands, Command, DrawTexturedTrianglesCommand } from "./commands";
+import { batchCommands } from "./batchCommands";
 import { Viewport, type Texture } from "./types";
 import { type RenderAdapter } from "./adapter";
 
@@ -92,7 +93,8 @@ export class ReglAdapter implements RenderAdapter {
       }
     }
     this.drawCalls = 0;
-    for (const command of frame.commands) {
+    const batched = batchCommands(frame.commands);
+    for (const command of batched) {
       this.executeCommand(command, frame);
     }
   }
