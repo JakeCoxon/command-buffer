@@ -1,7 +1,7 @@
 // Core
 export { CommandBuffer } from "./commandBuffer";
 export type { FrameCommands, Command } from "./commands";
-export type { Viewport, Rect, Color } from "./types";
+export type { Viewport, Rect, Color, Texture } from "./types";
 
 // Adapters
 export { type RenderAdapter } from "./adapter";

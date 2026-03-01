@@ -1,5 +1,5 @@
 import { FrameCommands, Command, DrawTexturedTrianglesCommand } from "./commands";
-import { Viewport } from "./types";
+import { Viewport, type Texture } from "./types";
 import { type RenderAdapter } from "./adapter";
 
 type ReglLike = ((config: any) => any) & {
@@ -34,20 +34,43 @@ export class ReglAdapter implements RenderAdapter {
   }
 
   /**
-   * Register a texture for use with textured rendering
+   * Get the number of textures currently registered
    */
-  registerTexture(textureId: string, canvas: HTMLCanvasElement) {
-    const texture = this.regl.texture({
-      data: canvas,
-      mag: "linear",
-      min: "linear",
-      wrap: "clamp",
-      flipY: true, // Enable Y-flip: Canvas 2D (top-left) → WebGL (bottom-left)
-      format: "rgba", // Explicitly set RGBA format to preserve alpha channel
-      premultiplyAlpha: false, // Don't premultiply - we want raw alpha values
-    });
-    this.textures.set(textureId, texture);
-    console.log(`[ReglAdapter] Registered texture '${textureId}': format=rgba, size=${canvas.width}x${canvas.height}, premultiplyAlpha=false`);
+  getTextureCount(): number {
+    return this.textures.size;
+  }
+
+  /**
+   * Ensure a texture is uploaded: register if new, or update if already registered and needs update.
+   * flipY: true (default) = canvas top → texture v=1; flipY: false = canvas top → texture v=0.
+   */
+  uploadTexture(texture: Texture) {
+    const canvas = texture.getSource();
+    const flipY = texture.flipY !== false;
+    const existing = this.textures.get(texture.id);
+    if (!existing) {
+      const reglTex = this.regl.texture({
+        data: canvas,
+        mag: "linear",
+        min: "linear",
+        wrap: "clamp",
+        flipY,
+        format: "rgba",
+        premultiplyAlpha: false,
+      });
+      this.textures.set(texture.id, reglTex);
+      texture.markUpdated?.();
+      console.log(`[ReglAdapter] Registered texture '${texture.id}': format=rgba, size=${canvas.width}x${canvas.height}, flipY=${flipY}`);
+    } else if (!texture.needsUpdate || texture.needsUpdate()) {
+      existing({
+        data: canvas,
+        format: "rgba",
+        premultiplyAlpha: false,
+        flipY,
+      });
+      texture.markUpdated?.();
+      console.log(`[ReglAdapter] Updated texture '${texture.id}': format=rgba, size=${canvas.width}x${canvas.height}, flipY=${flipY}`);
+    }
   }
 
   /**
@@ -61,28 +84,13 @@ export class ReglAdapter implements RenderAdapter {
     }
   }
 
-  /**
-   * Update a texture from a canvas (useful when canvas content changes)
-   */
-  updateTexture(textureId: string, canvas: HTMLCanvasElement) {
-    const texture = this.textures.get(textureId);
-    if (texture) {
-      // Regl textures can be updated by setting the data property
-      // Preserve format and premultiplyAlpha settings
-      texture({ 
-        data: canvas,
-        format: "rgba",
-        premultiplyAlpha: false,
-      });
-      console.log(`[ReglAdapter] Updated texture '${textureId}': format=rgba, size=${canvas.width}x${canvas.height}`);
-    } else {
-      // If texture doesn't exist, register it
-      this.registerTexture(textureId, canvas);
-    }
-  }
-
   render(frame: FrameCommands) {
-    this.drawCalls = 0
+    if (frame.usedTextures) {
+      for (const texture of frame.usedTextures.values()) {
+        this.uploadTexture(texture);
+      }
+    }
+    this.drawCalls = 0;
     for (const command of frame.commands) {
       this.executeCommand(command, frame);
     }

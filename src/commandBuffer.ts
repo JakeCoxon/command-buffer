@@ -1,4 +1,4 @@
-import { Color, Rect, Viewport } from "./types";
+import { Color, Rect, Viewport, Texture } from "./types";
 import { Command, DrawTrianglesCommand, DrawTexturedTrianglesCommand, FrameCommands } from "./commands";
 
 type ColorFloats = { r: number; g: number; b: number; a: number };
@@ -8,6 +8,7 @@ export class CommandBuffer {
   private texturedVertices: number[] = [];
   private commands: Command[] = [];
   private currentViewport: Viewport | null = null;
+  private usedTextures = new Map<string, Texture>();
 
   constructor(private readonly defaultViewport: Viewport) {
     this.currentViewport = defaultViewport;
@@ -18,6 +19,7 @@ export class CommandBuffer {
     this.vertices.length = 0;
     this.texturedVertices.length = 0;
     this.commands.length = 0;
+    this.usedTextures.clear();
     this.currentViewport = viewport;
     this.commands.push({ type: "setViewport", viewport });
   }
@@ -43,12 +45,12 @@ export class CommandBuffer {
     const vertices = new Float32Array(this.vertices);
     const commands = this.batchCommands(this.commands);
     const result: FrameCommands = { vertices, commands };
-    
-    // Include textured vertices if any exist
+    result.usedTextures = new Map(this.usedTextures);
+
     if (this.texturedVertices.length > 0) {
       result.texturedVertices = new Float32Array(this.texturedVertices);
     }
-    
+
     this.reset(this.currentViewport ?? this.defaultViewport);
     return result;
   }
@@ -384,17 +386,16 @@ export class CommandBuffer {
   /**
    * Draw a textured rectangle
    */
-  drawTexturedRect(rect: Rect, uv: { u1: number; v1: number; u2: number; v2: number }, color: Color, textureId: string) {
+  drawTexturedRect(rect: Rect, uv: { u1: number; v1: number; u2: number; v2: number }, color: Color, texture: Texture) {
+    this.usedTextures.set(texture.id, texture);
     const { x, y, w, h } = rect;
     const c = this.normalizeColor(color);
     const offset = this.beginTexturedDraw();
 
-    // Top-left, top-right, bottom-left
     this.appendTexturedTriangle(x, y, uv.u1, uv.v1, x + w, y, uv.u2, uv.v1, x, y + h, uv.u1, uv.v2, c);
-    // Top-right, bottom-right, bottom-left
     this.appendTexturedTriangle(x + w, y, uv.u2, uv.v1, x + w, y + h, uv.u2, uv.v2, x, y + h, uv.u1, uv.v2, c);
 
-    this.endTexturedDraw(offset, textureId);
+    this.endTexturedDraw(offset, texture.id);
   }
 
   private appendTexturedTriangle(

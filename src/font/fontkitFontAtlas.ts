@@ -1,3 +1,4 @@
+import type { Texture } from "../types";
 import { AtlasNode, GlyphMetrics, GlyphRenderData, FontAtlas, PrebuiltAtlasJson } from "../fontAtlas";
 import * as fontkit from "fontkit";
 
@@ -647,6 +648,16 @@ export class FontkitFontAtlas implements FontAtlas {
    */
   getTextureId(): string {
     return this.textureId;
+  }
+
+  getTextureHandle(): Texture {
+    return {
+      id: this.textureId,
+      getSource: () => this.getTexture() as HTMLCanvasElement,
+      needsUpdate: () => this.needsTextureUpdate(),
+      markUpdated: () => this.markTextureUpdated(),
+      flipY: false, // UVs are in canvas space (v=0 top), so don't flip on upload
+    };
   }
 
   /**

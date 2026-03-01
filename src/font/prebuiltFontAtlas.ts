@@ -1,3 +1,4 @@
+import type { Texture } from "../types";
 import type {
   FontAtlas,
   GlyphMetrics,
@@ -89,6 +90,14 @@ export class PrebuiltFontAtlas implements FontAtlas {
 
   getTextureId(): string {
     return this.textureId;
+  }
+
+  getTextureHandle(): Texture {
+    return {
+      id: this.textureId,
+      getSource: () => this.textureCanvas,
+      needsUpdate: () => false,
+    };
   }
 
   getGlyphCount(): number {

@@ -1,5 +1,5 @@
 import { CommandBuffer } from "../../src/commandBuffer";
-import { Viewport, Rect, Color } from "../../src/types";
+import { Viewport, Rect, Color, Texture } from "../../src/types";
 import { FrameRecording, DrawCommand, TextRect } from "./frameRecording";
 import { TextureAtlasBuilder, TextureAtlas } from "./textureAtlas";
 import { AtlasLayout, SimpleGridLayout } from "./atlasLayout";
@@ -233,7 +233,10 @@ export class RecordingPlayer {
       return;
     }
 
-    // Render as textured rectangle
+    const texture: Texture = {
+      id: this.textureId,
+      getSource: () => this.textureAtlas!.canvas as HTMLCanvasElement,
+    };
     commandBuffer.drawTexturedRect(
       {
         x: textRect.x,
@@ -243,7 +246,7 @@ export class RecordingPlayer {
       },
       uv,
       textRect.color,
-      this.textureId
+      texture
     );
   }
 

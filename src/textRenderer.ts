@@ -19,55 +19,45 @@ export class TextRenderer {
 
   /**
    * Render a text string at the specified position
+   * @param scale Optional scale factor (e.g. 4 for 4x size); default 1
    */
   drawText(
     text: string,
     x: number,
     y: number,
     color: [number, number, number, number?] = [255, 255, 255, 255],
-    lineHeight?: number
+    lineHeight?: number,
+    scale: number = 1
   ): void {
-    const textureId = this.fontAtlas.getTextureId();
+    const texture = this.fontAtlas.getTextureHandle();
     let currentX = x;
-    let currentY = y;
+    const currentY = y;
 
-    // Process each character
     for (const char of text) {
-      // Skip newlines and carriage returns
       if (char.charCodeAt(0) === 10 || char.charCodeAt(0) === 13) {
         continue;
       }
 
-      // Ensure glyph is in atlas (cached if already added)
       this.fontAtlas.addGlyph(char);
-
-      // Get glyph data (from cache)
       const glyphData = this.fontAtlas.getGlyphData(char);
       if (!glyphData) {
-        continue; // Skip if glyph data not available
+        continue;
       }
 
       const { metrics, uv } = glyphData;
-
-      // Calculate glyph position
+      const w = metrics.width * scale;
+      const h = (metrics.ascend + metrics.descend) * scale;
       const glyphX = currentX;
-      const glyphY = currentY - metrics.ascend; // Y is top-left, adjust for ascent
+      const glyphY = currentY - metrics.ascend * scale;
 
-      // Draw the glyph as a textured rectangle
       this.commandBuffer.drawTexturedRect(
-        {
-          x: glyphX,
-          y: glyphY,
-          w: metrics.width,
-          h: metrics.ascend + metrics.descend,
-        },
+        { x: glyphX, y: glyphY, w, h },
         uv,
         color,
-        textureId
+        texture
       );
 
-      // Advance cursor
-      currentX += metrics.width;
+      currentX += metrics.width * scale;
     }
   }
 
@@ -108,6 +98,27 @@ export class TextRenderer {
         currentX += spaceWidth;
       }
     }
+  }
+
+  /**
+   * Get max ascend and descend for a string (for drawing metric lines).
+   */
+  getLineMetrics(text: string): { ascend: number; descend: number } {
+    let ascend = 0;
+    let descend = 0;
+    for (const char of text) {
+      if (char.charCodeAt(0) === 10 || char.charCodeAt(0) === 13) {
+        continue;
+      }
+      this.fontAtlas.addGlyph(char);
+      const glyphData = this.fontAtlas.getGlyphData(char);
+      if (glyphData) {
+        const { metrics } = glyphData;
+        if (metrics.ascend > ascend) ascend = metrics.ascend;
+        if (metrics.descend > descend) descend = metrics.descend;
+      }
+    }
+    return { ascend, descend };
   }
 
   /**

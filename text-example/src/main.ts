@@ -1,5 +1,6 @@
 import createREGL from "regl";
-import { Renderer, ReglAdapter, CanvasFontAtlas, FontkitFontAtlas, PrebuiltFontAtlas } from "../../src";
+import { Renderer, ReglAdapter, CanvasFontAtlas, FontkitFontAtlas, PrebuiltFontAtlas, type Texture } from "../../src";
+import type { FontAtlas } from "../../src/fontAtlas";
 import { DebugView } from "./debugView";
 
 import Lora from "./Lora-Medium.ttf?url";
@@ -22,34 +23,33 @@ const renderer = new Renderer(adapter, {
   viewport: { rect: { x: 0, y: 0, w: 0, h: 0 }, pixelRatio },
 });
 
-// Create and set font atlas
-// const fontAtlas = new CanvasFontAtlas(
-//   "sans-serif",
-//   24,
-//   "font-atlas",
-//   256,
-//   256,
-//   pixelRatio,
-//   1
-// );
+// Load all three font atlas types
+const canvasFontAtlas = new CanvasFontAtlas(
+  "Lora",
+  24,
+  "font-atlas-canvas",
+  256,
+  256,
+  pixelRatio,
+  1
+);
 
-// const fontKitAtlas = new FontkitFontAtlas(
-//   Lora,
-//   24,
-//   "font-atlas",
-//   256,
-//   256,
-//   pixelRatio,
-//   1,
-//   2 // 4x supersampling for better antialiasing
-// );
+const fontKitAtlas = new FontkitFontAtlas(
+  Lora,
+  24,
+  "font-atlas-fontkit",
+  256,
+  256,
+  pixelRatio,
+  1,
+  2
+);
+await fontKitAtlas.load();
 
-// await fontKitAtlas.load();
-// console.log("fontKitAtlas loaded", fontKitAtlas.getDebugInfo());
+const prebuiltFontAtlas = await PrebuiltFontAtlas.load(atlasJsonUrl, atlasPngUrl);
 
-// Load prebuilt font atlas (atlas.json + atlas.png in public/ from pnpm run build-font-atlas -- --out text-example/public)
-const fontAtlas = await PrebuiltFontAtlas.load(atlasJsonUrl, atlasPngUrl);
-console.log("PrebuiltFontAtlas loaded", fontAtlas.getDebugInfo());
+// Default atlas for title/paragraph (prebuilt)
+const fontAtlas = prebuiltFontAtlas;
 
 // Create opacity gradient texture for transparency testing
 function createOpacityGradientTexture(): HTMLCanvasElement {
@@ -74,8 +74,12 @@ function createOpacityGradientTexture(): HTMLCanvasElement {
   return canvas;
 }
 
-const gradientTexture = createOpacityGradientTexture();
-adapter.registerTexture("opacity-gradient", gradientTexture);
+const gradientCanvas = createOpacityGradientTexture();
+const gradientTexture: Texture = {
+  id: "opacity-gradient",
+  getSource: () => gradientCanvas,
+  needsUpdate: () => false,
+};
 
 // Debug view setup
 const debugView = new DebugView(renderer);
@@ -119,9 +123,9 @@ function drawFrame(time: number) {
   };
   renderer.drawTexturedRect(
     gradientRect,
-    { u1: 0, v1: 0, u2: 1, v2: 1 }, // Full texture UVs
-    [255, 255, 255, 255], // White color (opacity comes from texture)
-    "opacity-gradient"
+    { u1: 0, v1: 0, u2: 1, v2: 1 },
+    [255, 255, 255, 255],
+    gradientTexture
   );
 
   // Title
@@ -136,9 +140,72 @@ function drawFrame(time: number) {
   renderer.drawTextWrapped(sampleText, 50, 100, w - 100, textColor);
 
   // Show some different text
-  renderer.drawText("Numbers: 0123456789", 50, 250, textColor);
-  renderer.drawText("Symbols: !@#$%^&*()", 50, 290, textColor);
-  renderer.drawText("Mixed: Hello, World! 42", 50, 330, textColor);
+  // renderer.drawText("Numbers: 0123456789", 50, 250, textColor);
+  // renderer.drawText("Symbols: !@#$%^&*()", 50, 290, textColor);
+  // renderer.drawText("Mixed: Hello, World! 42", 50, 330, textColor);
+
+  // Scaled text with metric lines and per-glyph bounds, repeated for each atlas type
+  const metricsSampleString = "Hg";
+  const metricsScale = 10;
+  const metricsX = 50;
+  const labelColor: [number, number, number, number] = [180, 180, 200, 255];
+  const glyphBoundsColor: [number, number, number, number] = [220, 180, 220, 255];
+  const lineThickness = 1.5;
+  const verticalGap = 280;
+
+  function drawMetricsDemoForAtlas(atlas: FontAtlas, startY: number, title: string) {
+    renderer.setFontAtlas(atlas);
+    renderer.drawText(title, metricsX, startY - 18, labelColor);
+    const metricsY = startY;
+
+    renderer.drawText(metricsSampleString, metricsX, metricsY, textColor, undefined, metricsScale);
+
+    const runWidth = renderer.measureText(metricsSampleString) * metricsScale;
+    const lineMetrics = renderer.getLineMetrics(metricsSampleString);
+    const ascend = lineMetrics.ascend * metricsScale;
+    const descend = lineMetrics.descend * metricsScale;
+    const x2 = metricsX + runWidth;
+
+    let gx = metricsX;
+    for (const char of metricsSampleString) {
+      if (char.charCodeAt(0) === 10 || char.charCodeAt(0) === 13) continue;
+      atlas.addGlyph(char);
+      const gd = atlas.getGlyphData(char);
+      if (gd) {
+        const m = gd.metrics;
+        const gw = m.width * metricsScale;
+        const gh = (m.ascend + m.descend) * metricsScale;
+        const gy = metricsY - m.ascend * metricsScale;
+        renderer.drawRectOutline({ x: gx, y: gy, w: gw, h: gh }, 1, glyphBoundsColor);
+        gx += m.width * metricsScale;
+      }
+    }
+
+    renderer.drawLine(metricsX, metricsY, x2, metricsY, lineThickness, [255, 180, 80, 255]);
+    renderer.drawLine(metricsX, metricsY - ascend, x2, metricsY - ascend, lineThickness, [80, 220, 120, 255]);
+    renderer.drawLine(metricsX, metricsY + descend, x2, metricsY + descend, lineThickness, [80, 140, 255, 255]);
+    renderer.drawRectOutline(
+      { x: metricsX, y: metricsY - ascend, w: runWidth, h: ascend + descend },
+      1.5,
+      [200, 200, 220, 255]
+    );
+
+    const labelOffset = runWidth + 10;
+    renderer.drawText("baseline", metricsX + labelOffset, metricsY, labelColor);
+    renderer.drawText("ascender", metricsX + labelOffset, metricsY - ascend, labelColor);
+    renderer.drawText("descender", metricsX + labelOffset, metricsY + descend, labelColor);
+    renderer.drawText("bounds", metricsX + labelOffset, metricsY - ascend + 10, labelColor);
+  }
+
+  let metricsY = 400;
+  drawMetricsDemoForAtlas(prebuiltFontAtlas, metricsY, "PrebuiltFontAtlas");
+  metricsY += verticalGap;
+  drawMetricsDemoForAtlas(canvasFontAtlas, metricsY, "CanvasFontAtlas");
+  metricsY += verticalGap;
+  drawMetricsDemoForAtlas(fontKitAtlas, metricsY, "FontkitFontAtlas");
+
+  // Restore atlas for stats / debug view
+  renderer.setFontAtlas(fontAtlas);
 
   // Performance stats
   const glyphCount = renderer.fontAtlas?.getGlyphCount() || 0;
@@ -164,6 +231,8 @@ function drawFrame(time: number) {
     `vertices: ${vertexCount}`,
     `textured: ${texturedVertexCount}`,
     `commands: ${frame.commands.length}`,
+    `draw calls: ${adapter.getDrawCalls()}`,
+    `textures: ${adapter.getTextureCount()}`,
     `render: ${renderMs.toFixed(2)} ms`,
     `glyphs: ${glyphCount}`,
   ].join("\n");

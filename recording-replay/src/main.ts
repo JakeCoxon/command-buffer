@@ -205,13 +205,6 @@ async function loadRecording(file: File) {
     recordingPlayer = new RecordingPlayer();
     recordingPlayer.loadRecording(recording);
 
-    // Register texture atlas with adapter
-    const textureAtlas = recordingPlayer.getTextureAtlas();
-    if (textureAtlas) {
-      const textureId = recordingPlayer.getTextureId();
-      adapter.registerTexture(textureId, textureAtlas.canvas);
-    }
-
     stats.textContent = `Loaded recording\nVersion: ${recording.version}\nCommands: ${recording.commands.length}\nText rects: ${recording.textRects.length}`;
 
     // Render the frame

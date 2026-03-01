@@ -152,6 +152,8 @@ export type PrebuiltAtlasJson = {
   glyphs: Record<string, GlyphRenderData>;
 };
 
+import type { Texture } from "./types";
+
 /**
  * Interface for font atlas implementations
  */
@@ -166,6 +168,7 @@ export interface FontAtlas {
   markTextureUpdated(): void;
   getTexture(): HTMLCanvasElement | ArrayBuffer;
   getTextureId(): string;
+  getTextureHandle(): Texture;
   getGlyphCount(): number;
   getDebugInfo(): object;
 }

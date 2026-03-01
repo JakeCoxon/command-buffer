@@ -1,23 +1,19 @@
 import { FrameCommands } from "./commands";
+import type { Texture } from "./types";
 
 /**
  * Interface for rendering backends (regl, webgpu, etc.)
  */
 export interface RenderAdapter {
   /**
-   * Register a texture for use with textured rendering
+   * Ensure a texture is uploaded: register if new, or update if already registered and needsUpdate.
    */
-  registerTexture(textureId: string, canvas: HTMLCanvasElement): void;
+  uploadTexture(texture: Texture): void;
 
   /**
    * Unregister a texture
    */
   unregisterTexture(textureId: string): void;
-
-  /**
-   * Update a texture from a canvas
-   */
-  updateTexture(textureId: string, canvas: HTMLCanvasElement): void;
 
   /**
    * Render a frame of commands
@@ -28,4 +24,9 @@ export interface RenderAdapter {
    * Get the number of draw calls in the last render
    */
   getDrawCalls(): number;
+
+  /**
+   * Get the number of textures currently registered
+   */
+  getTextureCount(): number;
 }

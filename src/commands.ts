@@ -1,4 +1,4 @@
-import { Rect, Color, Viewport } from "./types";
+import { Rect, Color, Viewport, Texture } from "./types";
 
 export type DrawTrianglesCommand = {
   type: "drawTriangles";
@@ -46,4 +46,5 @@ export type FrameCommands = {
   vertices: Float32Array;
   texturedVertices?: Float32Array;
   commands: Command[];
+  usedTextures?: Map<string, Texture>;
 };

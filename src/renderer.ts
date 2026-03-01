@@ -2,7 +2,7 @@ import { CommandBuffer } from "./commandBuffer";
 import { TextRenderer } from "./textRenderer";
 import { type FontAtlas } from "./fontAtlas";
 import { type RenderAdapter } from "./adapter";
-import { Viewport, Color, Rect } from "./types";
+import { Viewport, Color, Rect, Texture } from "./types";
 import { FrameCommands } from "./commands";
 
 export interface RendererOptions {
@@ -18,7 +18,6 @@ export class Renderer {
   public fontAtlas: FontAtlas | null = null;
   private textRenderer: TextRenderer | null = null;
   private adapter: RenderAdapter;
-  private registeredTextureId: string | null = null;
 
   constructor(adapter: RenderAdapter, options: RendererOptions) {
     this.adapter = adapter;
@@ -29,7 +28,7 @@ export class Renderer {
 
   /**
    * Set a new font atlas. This is a simple field setter, similar to context2d.font.
-   * Texture registration/unregistration is handled automatically in endFrame().
+   * Texture uploads are handled by the adapter from frame.usedTextures.
    */
   setFontAtlas(fontAtlas: FontAtlas | null): void {
     this.fontAtlas = fontAtlas;
@@ -48,55 +47,14 @@ export class Renderer {
    * Begin a new frame - call this at the start of each render loop
    */
   beginFrame(clearColor?: Color, alpha?: number): void {
-    // Clear the buffer
     this.commandBuffer.clear(clearColor || [0, 0, 0, 255], alpha || 1);
   }
 
   /**
-   * End frame and render - call this at the end of each render loop
-   * 
-   * Handles texture updates after all drawing is complete but before rendering.
-   * This ensures any glyphs added during the frame are reflected in the texture.
-   * 
+   * End frame and render. The adapter uploads textures from frame.usedTextures.
    * @returns The flushed frame commands (useful for stats/debugging)
    */
   endFrame(): FrameCommands {
-    // Handle font atlas texture registration and updates
-    if (this.fontAtlas) {
-      const currentTextureId = this.fontAtlas.getTextureId();
-      
-      // Check if font atlas has changed (texture ID changed)
-      if (this.registeredTextureId !== currentTextureId) {
-        // Unregister old texture if it exists
-        if (this.registeredTextureId !== null) {
-          this.adapter.unregisterTexture(this.registeredTextureId);
-        }
-        // Register new texture
-        this.adapter.registerTexture(
-          currentTextureId,
-          this.fontAtlas.getTexture() as HTMLCanvasElement
-        );
-        this.registeredTextureId = currentTextureId;
-      }
-      
-      // Handle texture updates AFTER all drawing (including glyph additions) but BEFORE rendering
-      if (this.fontAtlas.needsTextureReRegister()) {
-        this.adapter.unregisterTexture(this.fontAtlas.getTextureId());
-        this.adapter.registerTexture(
-          this.fontAtlas.getTextureId(),
-          this.fontAtlas.getTexture() as HTMLCanvasElement
-        );
-        this.fontAtlas.markTextureReRegistered();
-      } else if (this.fontAtlas.needsTextureUpdate()) {
-        this.adapter.updateTexture(
-          this.fontAtlas.getTextureId(),
-          this.fontAtlas.getTexture() as HTMLCanvasElement
-        );
-        this.fontAtlas.markTextureUpdated();
-      }
-    }
-    
-    // Flush commands and render
     const frame = this.commandBuffer.flush();
     this.adapter.render(frame);
     return frame;
@@ -153,9 +111,9 @@ export class Renderer {
     rect: Rect,
     uv: { u1: number; v1: number; u2: number; v2: number },
     color: Color,
-    textureId: string
+    texture: Texture
   ): void {
-    this.commandBuffer.drawTexturedRect(rect, uv, color, textureId);
+    this.commandBuffer.drawTexturedRect(rect, uv, color, texture);
   }
 
   // Delegate text methods to TextRenderer
@@ -164,12 +122,13 @@ export class Renderer {
     x: number,
     y: number,
     color?: [number, number, number, number?],
-    lineHeight?: number
+    lineHeight?: number,
+    scale?: number
   ): void {
     if (!this.textRenderer) {
       throw new Error("Font atlas not set. Set renderer.fontAtlas before drawing text.");
     }
-    this.textRenderer.drawText(text, x, y, color, lineHeight);
+    this.textRenderer.drawText(text, x, y, color, lineHeight, scale ?? 1);
   }
 
   drawTextWrapped(
@@ -191,6 +150,13 @@ export class Renderer {
       throw new Error("Font atlas not set. Set renderer.fontAtlas before measuring text.");
     }
     return this.textRenderer.measureText(text);
+  }
+
+  getLineMetrics(text: string): { ascend: number; descend: number } {
+    if (!this.textRenderer) {
+      throw new Error("Font atlas not set. Set renderer.fontAtlas before getting line metrics.");
+    }
+    return this.textRenderer.getLineMetrics(text);
   }
 
   /**
