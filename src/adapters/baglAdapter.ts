@@ -106,9 +106,9 @@ export class BaglAdapter implements RenderAdapter {
         wrap: "clamp",
         flipY,
         format: "rgba",
-        // Text atlases are generated with premultiplied alpha; enable it
-        // here so blending works as standard src-alpha / one-minus-src-alpha.
-        premultiplyAlpha: true,
+        // Keep atlas uploads in straight-alpha form to match vertex colors and
+        // src-alpha blending (same behavior as ReglAdapter).
+        premultiplyAlpha: false,
       });
       this.textures.set(texture.id, baglTex);
       texture.lastUploadedVersion = texture.version;
@@ -117,7 +117,7 @@ export class BaglAdapter implements RenderAdapter {
       existing.update({
         data: source,
         format: "rgba",
-        premultiplyAlpha: true,
+        premultiplyAlpha: false,
         flipY,
       });
       texture.lastUploadedVersion = texture.version;
@@ -421,7 +421,7 @@ export class BaglAdapter implements RenderAdapter {
       depth: { enable: false },
       blend: {
         enable: true,
-        // func: { src: "src-alpha", dst: "one-minus-src-alpha" },
+        func: ["src-alpha", "one-minus-src-alpha"],
       },
     });
     return (props: any) => draw(props);
@@ -450,9 +450,9 @@ export class BaglAdapter implements RenderAdapter {
         out vec4 fragColor;
         uniform sampler2D uTexture;
         void main() {
-          // Sample premultiplied-alpha glyph atlas and modulate by vertex color.
+          // Sample atlas color and preserve alpha for edge antialiasing.
           vec4 texColor = texture(uTexture, vUv);
-          fragColor = texColor * vColor;
+          fragColor = vec4(texColor.rgb * vColor.rgb, texColor.a * vColor.a);
         }
       `,
       attributes: {
@@ -469,7 +469,7 @@ export class BaglAdapter implements RenderAdapter {
       depth: { enable: false },
       blend: {
         enable: true,
-        // func: { src: "src-alpha", dst: "one-minus-src-alpha" },
+        func: ["src-alpha", "one-minus-src-alpha"],
       },
     });
     return (props: any) => draw(props);

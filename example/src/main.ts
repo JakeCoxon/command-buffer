@@ -1,6 +1,12 @@
 import createREGL from "regl";
 import { createBagl } from "bagl-js";
-import { Renderer, BaglAdapter, CanvasFontAtlas, FrameCommands, ReglAdapter } from "../../src";
+import {
+  Renderer,
+  BaglAdapter,
+  CanvasFontAtlas,
+  FrameCommands,
+  ReglAdapter,
+} from "../../src";
 
 const canvas = document.getElementById("canvas") as HTMLCanvasElement;
 const statsDiv = document.getElementById("stats") as HTMLDivElement;
@@ -14,7 +20,7 @@ const createAdapter = () => {
     const regl = createREGL({ canvas });
     return new ReglAdapter(regl as any);
   }
-}
+};
 const adapter = createAdapter();
 const renderer = new Renderer(adapter, {
   viewport: { rect: { x: 0, y: 0, w: 0, h: 0 }, pixelRatio },
@@ -27,7 +33,7 @@ const fontAtlasColored = new CanvasFontAtlas(
   256,
   256,
   pixelRatio,
-  1
+  1,
 );
 const fontAtlasSciFi = new CanvasFontAtlas(
   "ui-monospace, monospace",
@@ -36,7 +42,7 @@ const fontAtlasSciFi = new CanvasFontAtlas(
   256,
   256,
   pixelRatio,
-  1
+  1,
 );
 
 const RENDER_TIME_WINDOW = 60; // ~1 sec at 60fps
@@ -50,7 +56,15 @@ const stats = {
   lastRenderMs: 0,
 };
 
-type MovingRect = { x: number; y: number; w: number; h: number; color: [number, number, number, number]; vx: number; vy: number };
+type MovingRect = {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  color: [number, number, number, number];
+  vx: number;
+  vy: number;
+};
 
 function rand(min: number, max: number) {
   return min + Math.random() * (max - min);
@@ -60,7 +74,7 @@ function randomColor(): [number, number, number, number] {
   return [rand(0, 256) | 0, rand(0, 256) | 0, rand(0, 256) | 0, 255];
 }
 
-const NUM_RECTS = 500;
+const NUM_RECTS = 2000;
 const rects: MovingRect[] = [];
 
 function initRects() {
@@ -95,7 +109,6 @@ function resize() {
 }
 
 function drawFrame(time: number) {
-
   const w = window.innerWidth;
   const h = window.innerHeight;
 
@@ -119,7 +132,6 @@ function drawFrame(time: number) {
     const str = `${Math.round(r.x)},${Math.round(r.y)}`;
     renderer.drawText(str, r.x, r.y, [255, 255, 255, 255]);
   }
-
 
   const start = performance.now();
   const frame = renderer.endFrame();
