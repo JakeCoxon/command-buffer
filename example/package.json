@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "bagl-js": "^0.1.0",
     "regl": "^2.1.0"
   },
   "devDependencies": {

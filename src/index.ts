@@ -8,7 +8,8 @@ export { createTextureHandle } from "./types";
 
 // Adapters
 export { type RenderAdapter } from "./adapter";
-export { ReglAdapter } from "./reglAdapter";
+export { ReglAdapter } from "./adapters/reglAdapter";
+export { BaglAdapter } from "./adapters/baglAdapter";
 
 // Text Rendering
 export { type FontAtlas } from "./fontAtlas";

@@ -1,19 +1,25 @@
 import createREGL from "regl";
-import { Renderer, ReglAdapter, CanvasFontAtlas, FrameCommands } from "../../src";
-import { drawColoredDemo } from "./demos/coloredDemo";
-import { drawSciFiDemo, type SciFiDemoStats } from "./demos/sciFiDemo";
+import { createBagl } from "bagl-js";
+import { Renderer, BaglAdapter, CanvasFontAtlas, FrameCommands, ReglAdapter } from "../../src";
 
 const canvas = document.getElementById("canvas") as HTMLCanvasElement;
-const stats = document.getElementById("stats") as HTMLDivElement;
-const regl = createREGL({ canvas });
-
+const statsDiv = document.getElementById("stats") as HTMLDivElement;
 const pixelRatio = window.devicePixelRatio || 1;
-const adapter = new ReglAdapter(regl as any);
+
+const createAdapter = () => {
+  if (true) {
+    const bagl = createBagl({ canvas });
+    return new BaglAdapter(bagl as any);
+  } else {
+    const regl = createREGL({ canvas });
+    return new ReglAdapter(regl as any);
+  }
+}
+const adapter = createAdapter();
 const renderer = new Renderer(adapter, {
   viewport: { rect: { x: 0, y: 0, w: 0, h: 0 }, pixelRatio },
 });
 
-// Font atlases: one for each demo
 const fontAtlasColored = new CanvasFontAtlas(
   "system-ui",
   16,
@@ -33,126 +39,46 @@ const fontAtlasSciFi = new CanvasFontAtlas(
   1
 );
 
-// Which demo is active (toggle on mouse press)
-let currentDemoIndex = 1;
-const sciFiStats: SciFiDemoStats = {
+const RENDER_TIME_WINDOW = 60; // ~1 sec at 60fps
+const renderTimeSamples: number[] = [];
+
+let paused = false;
+const stats = {
   lastVertexCount: 0,
   lastCmdBefore: 0,
   lastCmdAfter: 0,
   lastRenderMs: 0,
 };
 
-const sceneFbo = regl.framebuffer({ width: 1, height: 1 });
+type MovingRect = { x: number; y: number; w: number; h: number; color: [number, number, number, number]; vx: number; vy: number };
 
-// Post: colored demo (vignette + tint)
-const drawPostColored = regl({
-  vert: `
-    precision mediump float;
-    attribute vec2 aPosition;
-    varying vec2 vUv;
-    void main() {
-      vUv = 0.5 * (aPosition + 1.0);
-      gl_Position = vec4(aPosition, 0.0, 1.0);
-    }
-  `,
-  frag: `
-    precision mediump float;
-    varying vec2 vUv;
-    uniform float uTime;
-    uniform sampler2D uSource;
-    void main() {
-      vec2 uv = vUv;
-      float wave = sin(uTime + uv.y * 8.0) * 0.015;
-      float swirl = sin(uTime * 0.6 + uv.x * 6.0) * 0.01;
-      uv += vec2(wave, swirl);
-      vec4 base = texture2D(uSource, uv);
-      float vignette = smoothstep(0.9, 0.2, distance(vUv, vec2(0.5)));
-      vec3 tint = vec3(0.06, 0.2, 0.45) + 0.2 * vec3(
-        sin(uTime + vUv.x * 6.2831),
-        sin(uTime * 0.8 + vUv.y * 5.5),
-        sin(uTime * 1.2 + vUv.x * 4.2)
-      );
-      vec3 warped = base.rgb * (0.9 + 0.1 * sin(uTime + uv.x * 12.0));
-      vec3 color = mix(warped, warped + tint, vignette * 0.6);
-      gl_FragColor = vec4(color, base.a);
-    }
-  `,
-  attributes: { aPosition: [-1, -1, 3, -1, -1, 3] },
-  uniforms: {
-    uTime: regl.prop("time"),
-    uSource: regl.prop("source"),
-  },
-  count: 3,
-  depth: { enable: false },
-  blend: { enable: false },
-});
+function rand(min: number, max: number) {
+  return min + Math.random() * (max - min);
+}
 
-// Post: sci-fi (glitches)
-const drawPostSciFi = regl({
-  vert: `
-    precision mediump float;
-    attribute vec2 aPosition;
-    varying vec2 vUv;
-    void main() {
-      vUv = 0.5 * (aPosition + 1.0);
-      gl_Position = vec4(aPosition, 0.0, 1.0);
-    }
-  `,
-  frag: `
-    precision mediump float;
-    varying vec2 vUv;
-    uniform sampler2D uSource;
-    uniform float uTime;
-    uniform vec2 uResolution;
-    float hash(float n) { return fract(sin(n) * 43758.5453); }
-    float hash2(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
-    float noise2d(vec2 p) {
-      vec2 i = floor(p);
-      vec2 f = fract(p);
-      float a = hash2(i);
-      float b = hash2(i + vec2(1.0, 0.0));
-      float c = hash2(i + vec2(0.0, 1.0));
-      float d = hash2(i + vec2(1.0, 1.0));
-      vec2 u = f * f * (3.0 - 2.0 * f);
-      return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);
-    }
-    void main() {
-      vec2 uv = vUv;
-      float t = uTime * 60.0;
-      float tFloor = floor(t);
-      float tFract = fract(t);
-      float glitchSeed = hash(tFloor * 1.1) + hash(tFloor * 2.3) * 0.5;
-      float glitchActive = step(0.92, glitchSeed) * step(tFract, 0.08 + glitchSeed * 0.05);
-      float sliceY = floor(uv.y * 24.0) / 24.0;
-      float sliceId = sliceY * 100.0 + tFloor * 0.7;
-      float shift = (hash(sliceId) - 0.5) * 2.0 * glitchActive;
-      uv.x += shift * 0.02;
-      float r = texture2D(uSource, uv + vec2(0.008 * glitchActive, 0.0)).r;
-      float g = texture2D(uSource, uv).g;
-      float b = texture2D(uSource, uv - vec2(0.008 * glitchActive, 0.0)).b;
-      vec4 col = vec4(r, g, b, 1.0);
-      float row = floor(uv.y * uResolution.y);
-      float rowNoise = hash(row * 0.013 + tFloor * 7.3);
-      float scanGlitch = step(0.97, rowNoise) * glitchActive;
-      col.rgb = mix(col.rgb, vec3(hash2(uv + tFloor)), scanGlitch * 0.4);
-      float flicker = 1.0 - step(0.98, hash(tFloor * 3.1)) * glitchActive * 0.3;
-      col.rgb *= flicker;
-      float luminance = dot(col.rgb, vec3(0.299, 0.587, 0.114));
-      float grain = noise2d(uv * uResolution * 2.5 + uTime * 3.0);
-      col.rgb += (grain - 0.5) * 0.8 * luminance;
-      gl_FragColor = col;
-    }
-  `,
-  attributes: { aPosition: [-1, -1, 3, -1, -1, 3] },
-  uniforms: {
-    uSource: regl.prop("source"),
-    uTime: regl.prop("time"),
-    uResolution: regl.prop("resolution"),
-  },
-  count: 3,
-  depth: { enable: false },
-  blend: { enable: false },
-});
+function randomColor(): [number, number, number, number] {
+  return [rand(0, 256) | 0, rand(0, 256) | 0, rand(0, 256) | 0, 255];
+}
+
+const NUM_RECTS = 500;
+const rects: MovingRect[] = [];
+
+function initRects() {
+  rects.length = 0;
+  const w = window.innerWidth;
+  const h = window.innerHeight;
+  for (let i = 0; i < NUM_RECTS; i++) {
+    rects.push({
+      x: rand(0, Math.max(0, w - 40)),
+      y: rand(0, Math.max(0, h - 40)),
+      w: rand(20, 60),
+      h: rand(20, 60),
+      color: randomColor(),
+      vx: rand(-2, 2),
+      vy: rand(-2, 2),
+    });
+  }
+}
 
 function resize() {
   const width = window.innerWidth;
@@ -165,62 +91,64 @@ function resize() {
     rect: { x: 0, y: 0, w: width, h: height },
     pixelRatio,
   });
-  sceneFbo.resize(Math.floor(width * pixelRatio), Math.floor(height * pixelRatio));
+  initRects();
 }
 
 function drawFrame(time: number) {
+
   const w = window.innerWidth;
   const h = window.innerHeight;
-  const isColored = currentDemoIndex === 0;
 
-  renderer.setFontAtlas(isColored ? fontAtlasColored : fontAtlasSciFi);
-  renderer.beginFrame(isColored ? [24, 24, 28, 255] : [0, 0, 0, 255]);
+  renderer.setFontAtlas(fontAtlasSciFi);
+  renderer.beginFrame([24, 24, 28, 255]);
 
-  if (isColored) {
-    drawColoredDemo(renderer, time, w, h);
-  } else {
-    drawSciFiDemo(renderer, time, w, h, sciFiStats);
+  if (rects.length === 0) initRects();
+
+  const boundsW = w;
+  const boundsH = h;
+  for (const r of rects) {
+    if (!paused) {
+      r.x += r.vx;
+      r.y += r.vy;
+      if (r.x <= 0 || r.x + r.w >= boundsW) r.vx *= -1;
+      if (r.y <= 0 || r.y + r.h >= boundsH) r.vy *= -1;
+      r.x = Math.max(0, Math.min(boundsW - r.w, r.x));
+      r.y = Math.max(0, Math.min(boundsH - r.h, r.y));
+    }
+    renderer.drawRect({ x: r.x, y: r.y, w: r.w, h: r.h }, r.color);
+    const str = `${Math.round(r.x)},${Math.round(r.y)}`;
+    renderer.drawText(str, r.x, r.y, [255, 255, 255, 255]);
   }
 
+
   const start = performance.now();
-  let frame!: FrameCommands;
-  regl({ framebuffer: sceneFbo })(() => {
-    frame = renderer.endFrame();
-  });
+  const frame = renderer.endFrame();
   const end = performance.now();
 
-  sciFiStats.lastVertexCount = frame.vertices.length / 6;
-  sciFiStats.lastCmdBefore = frame.rawCommandCount ?? frame.commands.length;
-  sciFiStats.lastCmdAfter = adapter.getDrawCalls();
-  sciFiStats.lastRenderMs = end - start;
+  stats.lastVertexCount = frame.vertices.length / 6;
+  stats.lastCmdBefore = frame.rawCommandCount ?? frame.commands.length;
+  stats.lastCmdAfter = adapter.getDrawCalls();
+  const frameMs = end - start;
+  renderTimeSamples.push(frameMs);
+  if (renderTimeSamples.length > RENDER_TIME_WINDOW) renderTimeSamples.shift();
+  stats.lastRenderMs =
+    renderTimeSamples.reduce((a, b) => a + b, 0) / renderTimeSamples.length;
+  const renderMsMax =
+    renderTimeSamples.length > 0 ? Math.max(...renderTimeSamples) : 0;
 
-  regl({
-    viewport: { x: 0, y: 0, width: canvas.width, height: canvas.height },
-  })(() => {
-    if (isColored) {
-      drawPostColored({ time: time / 1000, source: sceneFbo });
-    } else {
-      drawPostSciFi({
-        source: sceneFbo,
-        time: time / 1000,
-        resolution: [canvas.width, canvas.height],
-      });
-    }
-  });
-
-  stats.textContent = [
-    `demo: ${isColored ? "colored" : "sci-fi"} (click to switch)`,
-    `vertices: ${sciFiStats.lastVertexCount}`,
-    `commands: ${sciFiStats.lastCmdBefore} → ${sciFiStats.lastCmdAfter}`,
+  statsDiv.textContent = [
+    `vertices: ${stats.lastVertexCount}`,
+    `commands: ${stats.lastCmdBefore} → ${stats.lastCmdAfter}`,
     `draw calls: ${adapter.getDrawCalls()}`,
-    `render: ${sciFiStats.lastRenderMs.toFixed(2)} ms`,
+    `render: ${stats.lastRenderMs.toFixed(2)} ms (avg)`,
+    `max: ${renderMsMax.toFixed(2)} ms`,
   ].join("\n");
 
   requestAnimationFrame(drawFrame);
 }
 
 canvas.addEventListener("click", () => {
-  currentDemoIndex = 1 - currentDemoIndex;
+  paused = !paused;
 });
 
 resize();

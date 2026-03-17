@@ -1,8 +1,8 @@
-import { FrameCommands, Command, DrawTexturedTrianglesCommand } from "./commands";
-import { batchCommands } from "./batchCommands";
-import type { DrawPacket, PackedKey } from "./drawPacket";
-import { Viewport, type Texture } from "./types";
-import { type RenderAdapter } from "./adapter";
+import { FrameCommands, DrawTexturedTrianglesCommand } from "../commands";
+import { batchCommands } from "../batchCommands";
+import type { DrawPacket, PackedKey } from "../drawPacket";
+import { Viewport, type Texture } from "../types";
+import { type RenderAdapter } from "../adapter";
 
 function hashString(s: string): number {
   let h = 0;
@@ -18,90 +18,113 @@ function viewportToKey(viewport: Viewport | null): string {
   return `${rect.x},${rect.y},${rect.w},${rect.h},${pixelRatio ?? 1}`;
 }
 
-type ReglLike = ((config: any) => any) & {
-  prop: (name: string) => any;
-  clear: (options: { color: number[]; depth?: number }) => void;
-  texture: (config: any) => any;
-  buffer: (config: { data?: ArrayBufferView; length?: number; usage?: string }) => any;
+type BaglBuffer = {
+  subdata: (data: ArrayBufferView, byteOffset?: number) => void;
+  destroy: () => void;
+  size: number;
+  data: ArrayBufferView;
 };
 
-type ReglAdapterOptions = {
+type BaglTexture = {
+  update: (opts: { data?: unknown; width?: number; height?: number; format?: string; premultiplyAlpha?: boolean; flipY?: boolean }) => void;
+  destroy: () => void;
+};
+
+type BaglLike = ((config: any) => (props?: any) => void) & {
+  clear: (options: { color?: number[]; depth?: number }) => void;
+  texture: (config: any) => BaglTexture;
+  buffer: (config: { data: ArrayBufferView; size: number; usage?: string }) => BaglBuffer;
+};
+
+type BaglAdapterOptions = {
   clear?: { color: [number, number, number, number] };
 };
 
-const BATCH_BUFFER_INITIAL_FLOATS = 65536 * 8; // enough for 64k textured vertices (larger stride)
+const BATCH_BUFFER_INITIAL_FLOATS = 65536 * 8;
 const SHAPES_FLOATS_PER_VERTEX = 6;
 const TEXTURED_FLOATS_PER_VERTEX = 8;
 
-export class ReglAdapter implements RenderAdapter {
-  private readonly drawShapes: any;
-  private readonly drawText: any;
-  private readonly textures: Map<string, any> = new Map();
+export class BaglAdapter implements RenderAdapter {
+  private readonly drawShapes: (props: {
+    positions: BaglBuffer;
+    colors: BaglBuffer;
+    count: number;
+    projection: Float32Array;
+    viewport?: { x: number; y: number; width: number; height: number };
+  }) => void;
+  private readonly drawText: (props: {
+    positions: BaglBuffer;
+    colors: BaglBuffer;
+    uvs: BaglBuffer;
+    count: number;
+    projection: Float32Array;
+    texture: BaglTexture;
+    viewport?: { x: number; y: number; width: number; height: number };
+  }) => void;
+  private readonly textures: Map<string, BaglTexture> = new Map();
   private currentViewport: Viewport | null = null;
   private surfaceSize: { w: number; h: number } | null = null;
 
-  /** Single scratch buffer for merged vertex data (one draw per group). Shared by shapes and textured; resized when a group exceeds capacity. */
-  private batchVertexBuffer: ReturnType<ReglLike["buffer"]> | null = null;
-  private batchVertexBufferCapacity = 0;
+  private batchPositionBuffer: BaglBuffer | null = null;
+  private batchColorBuffer: BaglBuffer | null = null;
+  private batchUvBuffer: BaglBuffer | null = null;
+  private batchPositionData: Float32Array | null = null;
+  private batchColorData: Float32Array | null = null;
+  private batchUvData: Float32Array | null = null;
+  private batchCapacity = 0;
+
+  private projectionCache = new Map<string, Float32Array>();
 
   drawCalls: number = 0;
 
-  constructor(private readonly regl: ReglLike, private readonly options: ReglAdapterOptions = {}) {
+  constructor(
+    private readonly bagl: BaglLike,
+    private readonly options: BaglAdapterOptions = {}
+  ) {
     this.drawShapes = this.createShapePipeline();
     this.drawText = this.createTextPipeline();
   }
 
-  /**
-   * Get the number of draw calls in the last render
-   */
   getDrawCalls(): number {
     return this.drawCalls;
   }
 
-  /**
-   * Get the number of textures currently registered
-   */
   getTextureCount(): number {
     return this.textures.size;
   }
 
-  /**
-   * Ensure a texture is uploaded: register if new, or update if already registered and version !== lastUploadedVersion.
-   * flipY: true (default) = canvas top → texture v=1; flipY: false = canvas top → texture v=0.
-   */
   uploadTexture(texture: Texture) {
     const source = texture.source;
     const flipY = texture.flipY !== false;
     const existing = this.textures.get(texture.id);
     const needsUpload = texture.version !== texture.lastUploadedVersion;
     if (!existing) {
-      const reglTex = this.regl.texture({
+      const baglTex = this.bagl.texture({
         data: source,
         mag: "linear",
         min: "linear",
         wrap: "clamp",
         flipY,
         format: "rgba",
-        premultiplyAlpha: false,
+        // Text atlases are generated with premultiplied alpha; enable it
+        // here so blending works as standard src-alpha / one-minus-src-alpha.
+        premultiplyAlpha: true,
       });
-      this.textures.set(texture.id, reglTex);
+      this.textures.set(texture.id, baglTex);
       texture.lastUploadedVersion = texture.version;
-      console.log(`[ReglAdapter] Registered texture '${texture.id}': format=rgba, size=${"width" in source ? source.width : 0}x${"height" in source ? source.height : 0}, flipY=${flipY}`);
+      console.log(`[BaglAdapter] Registered texture '${texture.id}': format=rgba, size=${"width" in source ? source.width : 0}x${"height" in source ? source.height : 0}, flipY=${flipY}`);
     } else if (needsUpload) {
-      existing({
+      existing.update({
         data: source,
         format: "rgba",
-        premultiplyAlpha: false,
+        premultiplyAlpha: true,
         flipY,
       });
       texture.lastUploadedVersion = texture.version;
-      console.log(`[ReglAdapter] Updated texture '${texture.id}': format=rgba, size=${"width" in source ? source.width : 0}x${"height" in source ? source.height : 0}, flipY=${flipY}`);
+      console.log(`[BaglAdapter] Updated texture '${texture.id}': format=rgba, size=${"width" in source ? source.width : 0}x${"height" in source ? source.height : 0}, flipY=${flipY}`);
     }
   }
 
-  /**
-   * Unregister a texture
-   */
   unregisterTexture(textureId: string) {
     const texture = this.textures.get(textureId);
     if (texture) {
@@ -127,9 +150,6 @@ export class ReglAdapter implements RenderAdapter {
     }
   }
 
-  /**
-   * Walk the command list once: apply clear/setViewport for side effects, build DrawPackets and PackedKeys.
-   */
   private commandsToDrawPackets(frame: FrameCommands): { packets: DrawPacket[]; keys: PackedKey[] } {
     const packets: DrawPacket[] = [];
     const keys: PackedKey[] = [];
@@ -153,7 +173,7 @@ export class ReglAdapter implements RenderAdapter {
     for (const command of frame.commands) {
       switch (command.type) {
         case "clear":
-          this.regl.clear({
+          this.bagl.clear({
             color: this.toClearColor(command.color, command.alpha),
             depth: 1,
           });
@@ -176,7 +196,7 @@ export class ReglAdapter implements RenderAdapter {
           currentSortLayer = sortLayerStack.pop() ?? 0;
           break;
         case "drawTriangles": {
-          const projection = currentViewport ? this.orthoTopLeft(currentViewport) : this.identity();
+          const projection = this.getProjection(currentViewport);
           const packet: DrawPacket = {
             pass: currentPass,
             pipeline: 0,
@@ -191,7 +211,7 @@ export class ReglAdapter implements RenderAdapter {
         }
         case "drawTexturedTriangles": {
           const texturedCommand = command as DrawTexturedTrianglesCommand;
-          const projection = currentViewport ? this.orthoTopLeft(currentViewport) : this.identity();
+          const projection = this.getProjection(currentViewport);
           const packet: DrawPacket = {
             pass: currentPass,
             pipeline: 1,
@@ -214,7 +234,6 @@ export class ReglAdapter implements RenderAdapter {
     return { packets, keys };
   }
 
-  /** Policy: encode island, orderHint, batch (pipeline + bindings + viewport), merge. Same batch → same regl command. */
   private keyFromPacket(packet: DrawPacket, viewportId: number): PackedKey {
     const bindingsId = packet.bindings.textureId ? hashString(packet.bindings.textureId) : 0;
     const batch =
@@ -227,34 +246,56 @@ export class ReglAdapter implements RenderAdapter {
     };
   }
 
-  /** Ensure shared scratch buffer has at least numFloats capacity; create or resize as needed. */
-  private ensureBatchBuffer(numFloats: number): void {
-    if (this.batchVertexBufferCapacity >= numFloats) return;
-    if (this.batchVertexBuffer) this.batchVertexBuffer.destroy();
-    this.batchVertexBufferCapacity = Math.max(BATCH_BUFFER_INITIAL_FLOATS, numFloats);
-    this.batchVertexBuffer = this.regl.buffer({
-      data: new Float32Array(this.batchVertexBufferCapacity),
+  private ensureBatchBuffers(numVerts: number, pipeline: 0 | 1): void {
+    const needCapacity = Math.max(
+      BATCH_BUFFER_INITIAL_FLOATS / (pipeline === 0 ? 6 : 8),
+      numVerts
+    );
+    if (this.batchCapacity >= needCapacity) return;
+
+    this.batchCapacity = needCapacity;
+    const posFloats = this.batchCapacity * 2;
+    const colorFloats = this.batchCapacity * 4;
+    const uvFloats = this.batchCapacity * 2;
+
+    if (this.batchPositionBuffer) this.batchPositionBuffer.destroy();
+    if (this.batchColorBuffer) this.batchColorBuffer.destroy();
+    if (this.batchUvBuffer) this.batchUvBuffer.destroy();
+
+    this.batchPositionData = new Float32Array(posFloats);
+    this.batchColorData = new Float32Array(colorFloats);
+    this.batchUvData = new Float32Array(uvFloats);
+
+    this.batchPositionBuffer = this.bagl.buffer({
+      data: this.batchPositionData,
+      size: 2,
+      usage: "stream",
+    });
+    this.batchColorBuffer = this.bagl.buffer({
+      data: this.batchColorData,
+      size: 4,
+      usage: "stream",
+    });
+    this.batchUvBuffer = this.bagl.buffer({
+      data: this.batchUvData,
+      size: 2,
       usage: "stream",
     });
   }
 
-  /**
-   * Merge all packets in group into one contiguous Float32Array.
-   * pipeline 0 = shapes (6 floats/vertex), 1 = textured (8 floats/vertex). Returns null for textured if texture or texturedVertices missing.
-   */
   private mergeGroupVertices(
     group: DrawPacket[],
     frame: FrameCommands,
     pipeline: 0 | 1
-  ): { merged: Float32Array; totalVerts: number; texture?: any } | null {
+  ): { merged: Float32Array; totalVerts: number; texture?: BaglTexture } | null {
     const floatsPerVertex = pipeline === 0 ? SHAPES_FLOATS_PER_VERTEX : TEXTURED_FLOATS_PER_VERTEX;
     const src = pipeline === 0 ? frame.vertices : frame.texturedVertices;
-    let texture: any = undefined;
+    let texture: BaglTexture | undefined = undefined;
     if (pipeline === 1) {
       if (!src) return null;
       texture = group[0].bindings.textureId
-        ? this.textures.get(group[0].bindings.textureId)
-        : null;
+        ? this.textures.get(group[0].bindings.textureId) ?? undefined
+        : undefined;
       if (!texture) return null;
     }
     const totalVerts = group.reduce((s, p) => s + p.geometry.count, 0);
@@ -266,12 +307,47 @@ export class ReglAdapter implements RenderAdapter {
       merged.set(src!.subarray(start, start + len), writeOffset);
       writeOffset += len;
     }
-    const result: { merged: Float32Array; totalVerts: number; texture?: any } = { merged, totalVerts };
+    const result: { merged: Float32Array; totalVerts: number; texture?: BaglTexture } = { merged, totalVerts };
     if (pipeline === 1) result.texture = texture;
     return result;
   }
 
-  /** Render one group with one draw call: merge vertices into scratch buffer, upload, draw. */
+  private deinterleaveShapes(merged: Float32Array, totalVerts: number): void {
+    const posData = this.batchPositionData!;
+    const colorData = this.batchColorData!;
+    for (let i = 0; i < totalVerts; i++) {
+      const o = i * 6;
+      posData[i * 2] = merged[o];
+      posData[i * 2 + 1] = merged[o + 1];
+      colorData[i * 4] = merged[o + 2];
+      colorData[i * 4 + 1] = merged[o + 3];
+      colorData[i * 4 + 2] = merged[o + 4];
+      colorData[i * 4 + 3] = merged[o + 5];
+    }
+    this.batchPositionBuffer!.subdata(posData.subarray(0, totalVerts * 2));
+    this.batchColorBuffer!.subdata(colorData.subarray(0, totalVerts * 4));
+  }
+
+  private deinterleaveTextured(merged: Float32Array, totalVerts: number): void {
+    const posData = this.batchPositionData!;
+    const colorData = this.batchColorData!;
+    const uvData = this.batchUvData!;
+    for (let i = 0; i < totalVerts; i++) {
+      const o = i * 8;
+      posData[i * 2] = merged[o];
+      posData[i * 2 + 1] = merged[o + 1];
+      colorData[i * 4] = merged[o + 2];
+      colorData[i * 4 + 1] = merged[o + 3];
+      colorData[i * 4 + 2] = merged[o + 4];
+      colorData[i * 4 + 3] = merged[o + 5];
+      uvData[i * 2] = merged[o + 6];
+      uvData[i * 2 + 1] = merged[o + 7];
+    }
+    this.batchPositionBuffer!.subdata(posData.subarray(0, totalVerts * 2));
+    this.batchColorBuffer!.subdata(colorData.subarray(0, totalVerts * 4));
+    this.batchUvBuffer!.subdata(uvData.subarray(0, totalVerts * 2));
+  }
+
   private renderGroup(group: DrawPacket[], frame: FrameCommands) {
     if (group.length === 0) return;
     const first = group[0];
@@ -283,88 +359,83 @@ export class ReglAdapter implements RenderAdapter {
     if (!mergedResult) return;
     const { merged, totalVerts, texture } = mergedResult;
 
-    this.ensureBatchBuffer(merged.length);
-    this.batchVertexBuffer!.subdata(merged);
+    this.ensureBatchBuffers(totalVerts, pipeline);
+    if (pipeline === 0) {
+      this.deinterleaveShapes(merged, totalVerts);
+    } else {
+      this.deinterleaveTextured(merged, totalVerts);
+    }
     this.drawCalls += 1;
 
     if (pipeline === 0) {
       this.drawShapes({
-        vertices: this.batchVertexBuffer,
-        offsetBytes: 0,
-        colorOffsetBytes: 8,
+        positions: this.batchPositionBuffer!,
+        colors: this.batchColorBuffer!,
         count: totalVerts,
         projection,
         viewport,
       });
     } else {
       this.drawText({
-        vertices: this.batchVertexBuffer,
-        offsetBytes: 0,
-        colorOffsetBytes: 8,
-        uvOffsetBytes: 24,
+        positions: this.batchPositionBuffer!,
+        colors: this.batchColorBuffer!,
+        uvs: this.batchUvBuffer!,
         count: totalVerts,
         projection,
-        texture,
+        texture: texture!,
         viewport,
       });
     }
   }
 
   private createShapePipeline() {
-    return this.regl({
-      vert: `
-        precision mediump float;
-        attribute vec2 aPosition;
-        attribute vec4 aColor;
-        varying vec4 vColor;
+    const bagl = this.bagl;
+    const draw = bagl({
+      vert: `#version 300 es
+        in vec2 aPosition;
+        in vec4 aColor;
+        out vec4 vColor;
         uniform mat4 uProjectionMatrix;
         void main() {
           gl_Position = uProjectionMatrix * vec4(aPosition, 0.0, 1.0);
           vColor = aColor;
         }
       `,
-      frag: `
+      frag: `#version 300 es
         precision mediump float;
-        varying vec4 vColor;
+        in vec4 vColor;
+        out vec4 fragColor;
         void main() {
-          gl_FragColor = vColor;
+          fragColor = vColor;
         }
       `,
       attributes: {
-        aPosition: {
-          buffer: this.regl.prop("vertices"),
-          offset: this.regl.prop("offsetBytes"),
-          stride: 24,
-        },
-        aColor: {
-          buffer: this.regl.prop("vertices"),
-          offset: this.regl.prop("colorOffsetBytes"),
-          stride: 24,
-        },
+        aPosition: (_ctx: unknown, props: any) => props.positions,
+        aColor: (_ctx: unknown, props: any) => props.colors,
       },
       uniforms: {
-        uProjectionMatrix: this.regl.prop("projection"),
+        uProjectionMatrix: (_ctx: unknown, props: any) => props.projection,
       },
-      count: this.regl.prop("count"),
-      primitive: "triangles",
-      viewport: this.regl.prop("viewport"),
+      count: (_ctx: unknown, props: any) => props.count,
+      viewport: (_ctx: unknown, props: any) => props.viewport,
       depth: { enable: false },
       blend: {
         enable: true,
-        func: { src: "src alpha", dst: "one minus src alpha" },
+        // func: { src: "src-alpha", dst: "one-minus-src-alpha" },
       },
     });
+    return (props: any) => draw(props);
   }
 
   private createTextPipeline() {
-    return this.regl({
-      vert: `
-        precision mediump float;
-        attribute vec2 aPosition;
-        attribute vec4 aColor;
-        attribute vec2 aUv;
-        varying vec4 vColor;
-        varying vec2 vUv;
+    const bagl = this.bagl;
+    const draw = bagl({
+      vert: `#version 300 es
+        in vec2 aPosition;
+        in vec4 aColor;
+        in vec2 aUv;
+        out vec4 vColor;
+        out vec2 vUv;
         uniform mat4 uProjectionMatrix;
         void main() {
           gl_Position = uProjectionMatrix * vec4(aPosition, 0.0, 1.0);
@@ -372,53 +443,51 @@ export class ReglAdapter implements RenderAdapter {
           vUv = aUv;
         }
       `,
-      frag: `
+      frag: `#version 300 es
         precision mediump float;
-        varying vec4 vColor;
-        varying vec2 vUv;
+        in vec4 vColor;
+        in vec2 vUv;
+        out vec4 fragColor;
         uniform sampler2D uTexture;
         void main() {
-          vec4 texColor = texture2D(uTexture, vUv);
-          // Multiply texture color by vertex color for tinting
-          // Preserve alpha channel from texture for proper transparency/antialiasing
-          gl_FragColor = vec4(texColor.rgb * vColor.rgb, texColor.a * vColor.a);
+          // Sample premultiplied-alpha glyph atlas and modulate by vertex color.
+          vec4 texColor = texture(uTexture, vUv);
+          fragColor = texColor * vColor;
         }
       `,
       attributes: {
-        aPosition: {
-          buffer: this.regl.prop("vertices"),
-          offset: this.regl.prop("offsetBytes"),
-          stride: 32,
-        },
-        aColor: {
-          buffer: this.regl.prop("vertices"),
-          offset: this.regl.prop("colorOffsetBytes"),
-          stride: 32,
-        },
-        aUv: {
-          buffer: this.regl.prop("vertices"),
-          offset: this.regl.prop("uvOffsetBytes"),
-          stride: 32,
-        },
+        aPosition: (_ctx: unknown, props: any) => props.positions,
+        aColor: (_ctx: unknown, props: any) => props.colors,
+        aUv: (_ctx: unknown, props: any) => props.uvs,
       },
       uniforms: {
-        uProjectionMatrix: this.regl.prop("projection"),
-        uTexture: this.regl.prop("texture"),
+        uProjectionMatrix: (_ctx: unknown, props: any) => props.projection,
+        uTexture: (_ctx: unknown, props: any) => props.texture,
       },
-      count: this.regl.prop("count"),
-      primitive: "triangles",
-      viewport: this.regl.prop("viewport"),
+      count: (_ctx: unknown, props: any) => props.count,
+      viewport: (_ctx: unknown, props: any) => props.viewport,
       depth: { enable: false },
       blend: {
         enable: true,
-        func: { src: "src alpha", dst: "one minus src alpha" },
+        // func: { src: "src-alpha", dst: "one-minus-src-alpha" },
       },
     });
+    return (props: any) => draw(props);
   }
 
   private toClearColor(color: [number, number, number, number?], alpha: number) {
     const [r, g, b, a = 255] = color;
     return [r / 255, g / 255, b / 255, (a / 255) * alpha];
+  }
+
+  private getProjection(viewport: Viewport | null): Float32Array {
+    const key = viewportToKey(viewport);
+    let proj = this.projectionCache.get(key);
+    if (!proj) {
+      proj = viewport ? this.orthoTopLeft(viewport) : this.identity();
+      this.projectionCache.set(key, proj);
+    }
+    return proj;
   }
 
   private identity() {

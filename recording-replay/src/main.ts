@@ -1,7 +1,7 @@
 import "@fontsource/roboto";
 import createREGL from "regl";
 import { CommandBuffer } from "../../src/commandBuffer";
-import { ReglAdapter } from "../../src/reglAdapter";
+import { ReglAdapter } from "../../src/adapters/reglAdapter";
 import { loadFrameRecordingFromFile } from "./recordingLoader";
 import { RecordingPlayer } from "./recordingPlayer";
 import { FrameRecording } from "./frameRecording";

@@ -8,6 +8,9 @@ importers:
 
   .:
     dependencies:
+      bagl-js:
+        specifier: ^0.1.0
+        version: 0.1.0
       regl:
         specifier: ^2.1.0
         version: 2.1.1
@@ -287,6 +290,9 @@ packages:
   '@types/estree@1.0.8':
     resolution: {integrity: sha512-dWHzHa2WqEXI/O1E9OjrocMTKJl2mSrEolh1Iomrv6U+JuNwaHXsXx9bLu5gG7BUWFIN0skIQJQ/L1rIex4X6w==}
 
+  bagl-js@0.1.0:
+    resolution: {integrity: sha512-hhskBKlOIVMkiICdll9GYKMm10dlXjXnXqtkOD6B/Nhp64pqv1w4TjjeP17mV0lzKRXivjNIrAQyvZ4PcRdfdw==}
+
   esbuild@0.21.5:
     resolution: {integrity: sha512-mg3OPMV4hXywwpoDxu3Qda5xCKQi+vCTZq8S9J/EpkhB2HzKXq4SNFZE3+NK93JYxc8VMSep+lOUSC/RVKaBqw==}
     engines: {node: '>=12'}
@@ -504,6 +510,8 @@ snapshots:
     optional: true
 
   '@types/estree@1.0.8': {}
+
+  bagl-js@0.1.0: {}
 
   esbuild@0.21.5:
     optionalDependencies:
