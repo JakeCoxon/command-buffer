@@ -37,7 +37,7 @@ const fontAtlasColored = new CanvasFontAtlas(
 );
 const fontAtlasSciFi = new CanvasFontAtlas(
   "ui-monospace, monospace",
-  14,
+  8,
   "example-font-scifi",
   256,
   256,
@@ -76,6 +76,25 @@ function randomColor(): [number, number, number, number] {
 
 const NUM_RECTS = 2000;
 const rects: MovingRect[] = [];
+const INTERACTION_RADIUS = 140;
+const INTERACTION_RADIUS_SQ = INTERACTION_RADIUS * INTERACTION_RADIUS;
+const INTERACTION_STRENGTH = 0.12;
+const INTERACTION_REPEL = 0.15;
+const VELOCITY_DAMPING = 0.995;
+const MAX_SPEED = 10;
+
+const mouse = {
+  x: 0,
+  y: 0,
+  prevX: 0,
+  prevY: 0,
+  vx: 0,
+  vy: 0,
+  active: false,
+  lastMoveTime: 0,
+};
+
+let lastFrameTime = 0;
 
 function initRects() {
   rects.length = 0;
@@ -108,9 +127,33 @@ function resize() {
   initRects();
 }
 
+function onPointerMove(event: PointerEvent) {
+  const rect = canvas.getBoundingClientRect();
+  const x = event.clientX - rect.left;
+  const y = event.clientY - rect.top;
+
+  if (!mouse.active) {
+    mouse.prevX = x;
+    mouse.prevY = y;
+  }
+
+  mouse.x = x;
+  mouse.y = y;
+  mouse.vx = x - mouse.prevX;
+  mouse.vy = y - mouse.prevY;
+  mouse.prevX = x;
+  mouse.prevY = y;
+  mouse.active = true;
+  mouse.lastMoveTime = performance.now();
+}
+
 function drawFrame(time: number) {
   const w = window.innerWidth;
   const h = window.innerHeight;
+  if (lastFrameTime === 0) lastFrameTime = time;
+  const dt = Math.max(0.5, Math.min(2.0, (time - lastFrameTime) / (1000 / 60)));
+  lastFrameTime = time;
+  const mouseRecentlyMoved = mouse.active && time - mouse.lastMoveTime < 150;
 
   renderer.setFontAtlas(fontAtlasSciFi);
   renderer.beginFrame([24, 24, 28, 255]);
@@ -121,8 +164,33 @@ function drawFrame(time: number) {
   const boundsH = h;
   for (const r of rects) {
     if (!paused) {
-      r.x += r.vx;
-      r.y += r.vy;
+      if (mouseRecentlyMoved) {
+        const cx = r.x + r.w * 0.5;
+        const cy = r.y + r.h * 0.5;
+        const dx = cx - mouse.x;
+        const dy = cy - mouse.y;
+        const distSq = dx * dx + dy * dy;
+        if (distSq < INTERACTION_RADIUS_SQ) {
+          const dist = Math.sqrt(distSq) || 1;
+          const falloff = 1 - dist / INTERACTION_RADIUS;
+          const repelX = (dx / dist) * falloff * INTERACTION_REPEL;
+          const repelY = (dy / dist) * falloff * INTERACTION_REPEL;
+          r.vx += (mouse.vx * INTERACTION_STRENGTH + repelX) * dt;
+          r.vy += (mouse.vy * INTERACTION_STRENGTH + repelY) * dt;
+        }
+      }
+
+      r.vx *= VELOCITY_DAMPING;
+      r.vy *= VELOCITY_DAMPING;
+      const speedSq = r.vx * r.vx + r.vy * r.vy;
+      if (speedSq > MAX_SPEED * MAX_SPEED) {
+        const inv = MAX_SPEED / Math.sqrt(speedSq);
+        r.vx *= inv;
+        r.vy *= inv;
+      }
+
+      r.x += r.vx * dt;
+      r.y += r.vy * dt;
       if (r.x <= 0 || r.x + r.w >= boundsW) r.vx *= -1;
       if (r.y <= 0 || r.y + r.h >= boundsH) r.vy *= -1;
       r.x = Math.max(0, Math.min(boundsW - r.w, r.x));
@@ -161,6 +229,13 @@ function drawFrame(time: number) {
 
 canvas.addEventListener("click", () => {
   paused = !paused;
+});
+canvas.addEventListener("pointermove", onPointerMove);
+canvas.addEventListener("pointerenter", onPointerMove);
+canvas.addEventListener("pointerleave", () => {
+  mouse.active = false;
+  mouse.vx = 0;
+  mouse.vy = 0;
 });
 
 resize();
