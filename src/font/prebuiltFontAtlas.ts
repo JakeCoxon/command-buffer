@@ -12,18 +12,18 @@ import type {
  */
 export class PrebuiltFontAtlas implements FontAtlas {
   private readonly glyphs: Record<string, GlyphRenderData>;
-  private readonly textureCanvas: HTMLCanvasElement;
+  private readonly textureSource: HTMLCanvasElement;
   readonly textureHandle: Texture;
   private readonly json: PrebuiltAtlasJson;
   private debugEnabled: boolean = false;
 
-  constructor(json: PrebuiltAtlasJson, textureCanvas: HTMLCanvasElement) {
+  constructor(json: PrebuiltAtlasJson, textureSource: HTMLCanvasElement) {
     this.json = json;
     this.glyphs = { ...json.glyphs };
-    this.textureCanvas = textureCanvas;
+    this.textureSource = textureSource;
     this.textureHandle = createTextureHandle({
       id: json.textureId,
-      source: this.textureCanvas,
+      source: this.textureSource,
       flipY: true,
     });
   }
@@ -34,12 +34,13 @@ export class PrebuiltFontAtlas implements FontAtlas {
    */
   static async load(
     jsonInput: string | PrebuiltAtlasJson,
-    imageUrl: string
+    imageUrl: string,
   ): Promise<PrebuiltFontAtlas> {
     const json: PrebuiltAtlasJson =
       typeof jsonInput === "string"
         ? await fetch(jsonInput).then((r) => {
-            if (!r.ok) throw new Error(`Failed to fetch atlas JSON: ${r.statusText}`);
+            if (!r.ok)
+              throw new Error(`Failed to fetch atlas JSON: ${r.statusText}`);
             return r.json();
           })
         : jsonInput;
@@ -152,7 +153,7 @@ export class PrebuiltFontAtlas implements FontAtlas {
 async function loadImageToCanvas(
   imageUrl: string,
   width: number,
-  height: number
+  height: number,
 ): Promise<HTMLCanvasElement> {
   const response = await fetch(imageUrl);
   if (!response.ok) {
