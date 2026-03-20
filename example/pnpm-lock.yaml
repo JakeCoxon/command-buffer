@@ -12,8 +12,8 @@ importers:
         specifier: ^5.2.10
         version: 5.2.10
       bagl-js:
-        specifier: ^0.1.0
-        version: 0.1.0
+        specifier: ^0.1.1
+        version: 0.1.1
       fontkit:
         specifier: ^2.0.4
         version: 2.0.4
@@ -302,8 +302,8 @@ packages:
   '@types/estree@1.0.8':
     resolution: {integrity: sha512-dWHzHa2WqEXI/O1E9OjrocMTKJl2mSrEolh1Iomrv6U+JuNwaHXsXx9bLu5gG7BUWFIN0skIQJQ/L1rIex4X6w==}
 
-  bagl-js@0.1.0:
-    resolution: {integrity: sha512-hhskBKlOIVMkiICdll9GYKMm10dlXjXnXqtkOD6B/Nhp64pqv1w4TjjeP17mV0lzKRXivjNIrAQyvZ4PcRdfdw==}
+  bagl-js@0.1.1:
+    resolution: {integrity: sha512-8thVTkj6yXF7Sr73k+fc6e4ps3GoIqyFPGk+SG6OJEqibH3E3vNv3yrwm5QLPjxBjfMUFcN6JJUqFkUiZNFiDg==}
 
   base64-js@1.5.1:
     resolution: {integrity: sha512-AKpaYlHn8t4SVbOHCy+b5+KKgvR4vrsD8vbvrbiQJps7fKDTkjkDry6ji0rUJjC0kzbNePLwzxq8iypo41qeWA==}
@@ -566,7 +566,7 @@ snapshots:
 
   '@types/estree@1.0.8': {}
 
-  bagl-js@0.1.0: {}
+  bagl-js@0.1.1: {}
 
   base64-js@1.5.1: {}
 

@@ -10,7 +10,7 @@
   },
   "dependencies": {
     "@fontsource/roboto": "^5.2.10",
-    "bagl-js": "^0.1.0",
+    "bagl-js": "^0.1.1",
     "fontkit": "^2.0.4",
     "regl": "^2.1.0"
   },
