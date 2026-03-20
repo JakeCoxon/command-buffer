@@ -9,7 +9,7 @@ export interface AtlasGlyph {
 
 export interface AtlasEntry {
   glyph: AtlasGlyph;
-  x: number; // Position in atlas
+  x: number;
   y: number;
   width: number;
   height: number;
@@ -20,36 +20,28 @@ export interface AtlasLayout {
 }
 
 export class SimpleGridLayout implements AtlasLayout {
-  private padding: number;
+  private readonly padding: number;
 
   constructor(padding: number = 2) {
     this.padding = padding;
   }
 
-  layout(glyphs: AtlasGlyph[], maxWidth: number, maxHeight: number): AtlasEntry[] {
+  layout(glyphs: AtlasGlyph[], maxWidth: number, _maxHeight: number): AtlasEntry[] {
     const entries: AtlasEntry[] = [];
-    
     if (glyphs.length === 0) {
       return entries;
     }
 
-    // Find the maximum width and height for grid cells
-    const maxCellWidth = Math.max(...glyphs.map(g => g.width)) + this.padding * 2;
-    const maxCellHeight = Math.max(...glyphs.map(g => g.height)) + this.padding * 2;
+    const maxCellWidth = Math.max(...glyphs.map((glyph) => glyph.width)) + this.padding * 2;
+    const maxCellHeight = Math.max(...glyphs.map((glyph) => glyph.height)) + this.padding * 2;
+    const cols = Math.max(1, Math.floor(maxWidth / maxCellWidth));
 
-    // Calculate grid dimensions
-    const cols = Math.floor(maxWidth / maxCellWidth);
-    const rows = Math.ceil(glyphs.length / cols);
-
-    // Layout glyphs in a simple grid
     for (let i = 0; i < glyphs.length; i++) {
       const glyph = glyphs[i];
       const col = i % cols;
       const row = Math.floor(i / cols);
-
       const x = col * maxCellWidth + this.padding;
       const y = row * maxCellHeight + this.padding;
-
       entries.push({
         glyph,
         x,

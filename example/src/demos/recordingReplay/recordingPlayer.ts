@@ -1,65 +1,47 @@
-import { CommandBuffer } from "../../src/commandBuffer";
-import { Viewport, Rect, Color, Texture } from "../../src/types";
-import { FrameRecording, DrawCommand, TextRect } from "./frameRecording";
-import { TextureAtlasBuilder, TextureAtlas } from "./textureAtlas";
-import { AtlasLayout, SimpleGridLayout } from "./atlasLayout";
+import { CommandBuffer } from "../../../../src/commandBuffer";
+import type { Viewport, Texture } from "../../../../src/types";
+import type { FrameRecording, DrawCommand, TextRect } from "./frameRecording";
+import { TextureAtlasBuilder, type TextureAtlas } from "./textureAtlas";
+import { type AtlasLayout, SimpleGridLayout } from "./atlasLayout";
 
 export class RecordingPlayer {
   private recording: FrameRecording | null = null;
   private textureAtlas: TextureAtlas | null = null;
-  private textureId: string = "textAtlas";
-  private layout: AtlasLayout;
+  private textureId = "textAtlas";
+  private readonly layout: AtlasLayout;
+
   maxCommands = -1;
 
   constructor(layout?: AtlasLayout) {
     this.layout = layout ?? new SimpleGridLayout();
   }
 
-  /**
-   * Load a frame recording and prepare it for playback
-   */
-  loadRecording(recording: FrameRecording) {
+  loadRecording(recording: FrameRecording): void {
     this.recording = recording;
-    
-    // Build texture atlas from text rects
     const builder = new TextureAtlasBuilder();
     this.textureAtlas = builder.buildAtlas(recording, this.layout);
   }
 
-  /**
-   * Get the texture atlas canvas (for registration with ReglAdapter)
-   */
   getTextureAtlas(): TextureAtlas | null {
     return this.textureAtlas;
   }
 
-  /**
-   * Get the texture ID used for rendering
-   */
   getTextureId(): string {
     return this.textureId;
   }
 
-  /**
-   * Set the texture ID (useful if multiple atlases are used)
-   */
-  setTextureId(textureId: string) {
+  setTextureId(textureId: string): void {
     this.textureId = textureId;
   }
 
-  /**
-   * Play the loaded recording into a CommandBuffer
-   */
   play(commandBuffer: CommandBuffer): void {
     if (!this.recording) {
       throw new Error("No recording loaded");
     }
 
-    const recording = this.recording;
-
-    // Set initial viewport
-    const logicalPixels = recording.state.viewport.logicalPixels;
-    const pixelRatio = recording.metadata.pixelRatio;
+    const source = this.recording;
+    const logicalPixels = source.state.viewport.logicalPixels;
+    const pixelRatio = source.metadata.pixelRatio;
     const initialViewport: Viewport = {
       rect: {
         x: logicalPixels.x,
@@ -70,35 +52,24 @@ export class RecordingPlayer {
       pixelRatio,
     };
     commandBuffer.setViewport(initialViewport);
+    commandBuffer.clear(source.state.clearColor, source.state.clearAlpha);
 
-    // Set clear color
-    commandBuffer.clear(recording.state.clearColor, recording.state.clearAlpha);
-
-    // Track current viewport to avoid unnecessary changes
     let currentViewport: Viewport | null = null;
-
-    // Sort commands by sequence to ensure correct order
-    let sortedCommands = [...recording.commands]; //.sort((a, b) => a.sequence - b.sequence);
+    let commands = [...source.commands];
     if (this.maxCommands > 0) {
-      sortedCommands = sortedCommands.slice(0, this.maxCommands);
+      commands = commands.slice(0, this.maxCommands);
     }
 
-    // Render all commands
-    for (const command of sortedCommands) {
-      // Update viewport if it changed
+    for (const command of commands) {
       const commandViewport = this.convertViewport(command.viewport, pixelRatio);
       if (!this.viewportsEqual(currentViewport, commandViewport)) {
         commandBuffer.setViewport(commandViewport);
         currentViewport = commandViewport;
       }
-
-      // Convert and render command
       this.renderCommand(commandBuffer, command);
     }
 
-    // Render text rects as colored rectangles
-    for (const textRect of recording.textRects) {
-      // Text rects use the initial viewport
+    for (const textRect of source.textRects) {
       if (!this.viewportsEqual(currentViewport, initialViewport)) {
         commandBuffer.setViewport(initialViewport);
         currentViewport = initialViewport;
@@ -113,12 +84,9 @@ export class RecordingPlayer {
         if (command.filled) {
           commandBuffer.drawCircle(command.x, command.y, command.radius, command.color);
         } else {
-          // Use default lineWidth of 1 if not specified in frame recording format
-          const lineWidth = 1;
-          commandBuffer.drawCircleOutline(command.x, command.y, command.radius, lineWidth, command.color);
+          commandBuffer.drawCircleOutline(command.x, command.y, command.radius, 1, command.color);
         }
         break;
-
       case "drawArc":
         if (command.filled) {
           commandBuffer.drawArc(
@@ -130,20 +98,17 @@ export class RecordingPlayer {
             command.color
           );
         } else {
-          // Use lineWidth from command if available, otherwise default to 1
-          const lineWidth = command.lineWidth ?? 1;
           commandBuffer.drawArcOutline(
             command.x,
             command.y,
             command.radius,
             command.startAngle,
             command.endAngle,
-            lineWidth,
+            command.lineWidth ?? 1,
             command.color
           );
         }
         break;
-
       case "drawLine":
         commandBuffer.drawLine(
           command.x1,
@@ -154,80 +119,46 @@ export class RecordingPlayer {
           command.color
         );
         break;
-
       case "drawRect":
         commandBuffer.drawRect(
-          {
-            x: command.x,
-            y: command.y,
-            w: command.width,
-            h: command.height,
-          },
+          { x: command.x, y: command.y, w: command.width, h: command.height },
           command.color
         );
         break;
-
       case "drawRoundedRect":
         if (command.filled) {
           commandBuffer.drawRoundedRect(
-            {
-              x: command.x,
-              y: command.y,
-              w: command.width,
-              h: command.height,
-            },
+            { x: command.x, y: command.y, w: command.width, h: command.height },
             command.radius,
             command.color
           );
         } else {
-          // Use default lineWidth of 1 if not specified in frame recording format
-          const lineWidth = 1;
           commandBuffer.drawRoundedRectOutline(
-            {
-              x: command.x,
-              y: command.y,
-              w: command.width,
-              h: command.height,
-            },
+            { x: command.x, y: command.y, w: command.width, h: command.height },
             command.radius,
-            lineWidth,
+            1,
             command.color
           );
         }
         break;
-
       case "drawRenderLayer":
-        // Skip layer commands as per user preference
         break;
     }
   }
 
   private renderTextRect(commandBuffer: CommandBuffer, textRect: TextRect): void {
     if (!this.textureAtlas) {
-      // Fallback to colored rectangle if atlas not available
       commandBuffer.drawRect(
-        {
-          x: textRect.x,
-          y: textRect.y,
-          w: textRect.width,
-          h: textRect.height,
-        },
+        { x: textRect.x, y: textRect.y, w: textRect.width, h: textRect.height },
         textRect.color
       );
       return;
     }
 
-    // Get UV coordinates for this text rect
     const uv = this.textureAtlas.entries.get(textRect);
     if (!uv) {
-      // Fallback if UV mapping not found
       commandBuffer.drawRect(
-        {
-          x: textRect.x,
-          y: textRect.y,
-          w: textRect.width,
-          h: textRect.height,
-        },
+        { x: textRect.x, y: textRect.y, w: textRect.width, h: textRect.height },
         textRect.color
       );
       return;
@@ -235,17 +166,12 @@ export class RecordingPlayer {
 
     const texture: Texture = {
       id: this.textureId,
-      source: this.textureAtlas!.canvas as HTMLCanvasElement,
+      source: this.textureAtlas.canvas,
       version: 0,
       lastUploadedVersion: 0,
     };
     commandBuffer.drawTexturedRect(
-      {
-        x: textRect.x,
-        y: textRect.y,
-        w: textRect.width,
-        h: textRect.height,
-      },
+      { x: textRect.x, y: textRect.y, w: textRect.width, h: textRect.height },
       uv,
       textRect.color,
       texture
@@ -253,7 +179,10 @@ export class RecordingPlayer {
   }
 
   private convertViewport(
-    viewport: { hardwarePixels: { w: number; h: number }; logicalPixels: { x: number; y: number; w: number; h: number } },
+    viewport: {
+      hardwarePixels: { w: number; h: number };
+      logicalPixels: { x: number; y: number; w: number; h: number };
+    },
     pixelRatio: number
   ): Viewport {
     return {
@@ -276,19 +205,5 @@ export class RecordingPlayer {
       a.rect.h === b.rect.h &&
       a.pixelRatio === b.pixelRatio
     );
-  }
-
-  /**
-   * Get recording metadata
-   */
-  getMetadata() {
-    return this.recording?.metadata ?? null;
-  }
-
-  /**
-   * Get recording state
-   */
-  getState() {
-    return this.recording?.state ?? null;
   }
 }

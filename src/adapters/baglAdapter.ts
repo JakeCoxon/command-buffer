@@ -26,14 +26,32 @@ type BaglBuffer = {
 };
 
 type BaglTexture = {
-  update: (opts: { data?: unknown; width?: number; height?: number; format?: string; premultiplyAlpha?: boolean; flipY?: boolean }) => void;
+  update: (opts: {
+    data?: unknown;
+    width?: number;
+    height?: number;
+    format?: string;
+    premultiplyAlpha?: boolean;
+    flipY?: boolean;
+  }) => void;
   destroy: () => void;
+};
+
+type BaglAttributeDescriptor = {
+  buffer: BaglBuffer;
+  size?: number;
+  stride?: number;
+  offset?: number;
 };
 
 type BaglLike = ((config: any) => (props?: any) => void) & {
   clear: (options: { color?: number[]; depth?: number }) => void;
   texture: (config: any) => BaglTexture;
-  buffer: (config: { data: ArrayBufferView; size: number; usage?: string }) => BaglBuffer;
+  buffer: (config: {
+    data: ArrayBufferView;
+    size: number;
+    usage?: string;
+  }) => BaglBuffer;
 };
 
 type BaglAdapterOptions = {
@@ -46,32 +64,24 @@ const TEXTURED_FLOATS_PER_VERTEX = 8;
 
 export class BaglAdapter implements RenderAdapter {
   private readonly drawShapes: (props: {
-    positions: BaglBuffer;
-    colors: BaglBuffer;
+    vertices: BaglBuffer;
     count: number;
     projection: Float32Array;
     viewport?: { x: number; y: number; width: number; height: number };
   }) => void;
   private readonly drawText: (props: {
-    positions: BaglBuffer;
-    colors: BaglBuffer;
-    uvs: BaglBuffer;
+    vertices: BaglBuffer;
     count: number;
     projection: Float32Array;
     texture: BaglTexture;
     viewport?: { x: number; y: number; width: number; height: number };
   }) => void;
   private readonly textures: Map<string, BaglTexture> = new Map();
-  private currentViewport: Viewport | null = null;
   private surfaceSize: { w: number; h: number } | null = null;
 
-  private batchPositionBuffer: BaglBuffer | null = null;
-  private batchColorBuffer: BaglBuffer | null = null;
-  private batchUvBuffer: BaglBuffer | null = null;
-  private batchPositionData: Float32Array | null = null;
-  private batchColorData: Float32Array | null = null;
-  private batchUvData: Float32Array | null = null;
-  private batchCapacity = 0;
+  private batchVertexBuffer: BaglBuffer | null = null;
+  private batchVertexData: Float32Array | null = null;
+  private batchVertexBufferCapacity = 0;
 
   private projectionCache = new Map<string, Float32Array>();
 
@@ -79,7 +89,7 @@ export class BaglAdapter implements RenderAdapter {
 
   constructor(
     private readonly bagl: BaglLike,
-    private readonly options: BaglAdapterOptions = {}
+    private readonly options: BaglAdapterOptions = {},
   ) {
     this.drawShapes = this.createShapePipeline();
     this.drawText = this.createTextPipeline();
@@ -112,7 +122,6 @@ export class BaglAdapter implements RenderAdapter {
       });
       this.textures.set(texture.id, baglTex);
       texture.lastUploadedVersion = texture.version;
-      console.log(`[BaglAdapter] Registered texture '${texture.id}': format=rgba, size=${"width" in source ? source.width : 0}x${"height" in source ? source.height : 0}, flipY=${flipY}`);
     } else if (needsUpload) {
       existing.update({
         data: source,
@@ -121,7 +130,6 @@ export class BaglAdapter implements RenderAdapter {
         flipY,
       });
       texture.lastUploadedVersion = texture.version;
-      console.log(`[BaglAdapter] Updated texture '${texture.id}': format=rgba, size=${"width" in source ? source.width : 0}x${"height" in source ? source.height : 0}, flipY=${flipY}`);
     }
   }
 
@@ -140,6 +148,15 @@ export class BaglAdapter implements RenderAdapter {
       }
     }
     this.drawCalls = 0;
+    if (
+      this.options.clear &&
+      !frame.commands.some((command) => command.type === "clear")
+    ) {
+      this.bagl.clear({
+        color: this.toClearColor(this.options.clear.color, 1),
+        depth: 1,
+      });
+    }
 
     const { packets, keys } = this.commandsToDrawPackets(frame);
     if (packets.length === 0) return;
@@ -150,10 +167,14 @@ export class BaglAdapter implements RenderAdapter {
     }
   }
 
-  private commandsToDrawPackets(frame: FrameCommands): { packets: DrawPacket[]; keys: PackedKey[] } {
+  private commandsToDrawPackets(frame: FrameCommands): {
+    packets: DrawPacket[];
+    keys: PackedKey[];
+  } {
     const packets: DrawPacket[] = [];
     const keys: PackedKey[] = [];
     let currentViewport: Viewport | null = null;
+    let currentProjection = this.getProjection(currentViewport);
     let currentPass = 0;
     let currentSortLayer = 0;
     const sortLayerStack: number[] = [];
@@ -178,10 +199,11 @@ export class BaglAdapter implements RenderAdapter {
             depth: 1,
           });
           currentPass++;
+          currentProjection = this.getProjection(currentViewport);
           break;
         case "setViewport":
           currentViewport = command.viewport;
-          this.currentViewport = command.viewport;
+          currentProjection = this.getProjection(currentViewport);
           const rect = command.viewport.rect;
           if (rect.x === 0 && rect.y === 0) {
             this.surfaceSize = { w: rect.w, h: rect.h };
@@ -191,19 +213,26 @@ export class BaglAdapter implements RenderAdapter {
           sortLayerStack.push(currentSortLayer);
           currentSortLayer = 0;
           currentPass++;
+          currentProjection = this.getProjection(currentViewport);
           break;
         case "popLayer":
           currentSortLayer = sortLayerStack.pop() ?? 0;
           break;
         case "drawTriangles": {
-          const projection = this.getProjection(currentViewport);
           const packet: DrawPacket = {
             pass: currentPass,
             pipeline: 0,
             bindings: {},
-            geometry: { buffer: "vertices", offset: command.offset, count: command.count },
+            geometry: {
+              buffer: "vertices",
+              offset: command.offset,
+              count: command.count,
+            },
             sortLayer: currentSortLayer,
-            drawParams: { viewport: currentViewport, projection },
+            drawParams: {
+              viewport: currentViewport,
+              projection: currentProjection,
+            },
           };
           packets.push(packet);
           keys.push(this.keyFromPacket(packet, getViewportId(currentViewport)));
@@ -211,7 +240,6 @@ export class BaglAdapter implements RenderAdapter {
         }
         case "drawTexturedTriangles": {
           const texturedCommand = command as DrawTexturedTrianglesCommand;
-          const projection = this.getProjection(currentViewport);
           const packet: DrawPacket = {
             pass: currentPass,
             pipeline: 1,
@@ -222,7 +250,10 @@ export class BaglAdapter implements RenderAdapter {
               count: texturedCommand.count,
             },
             sortLayer: currentSortLayer,
-            drawParams: { viewport: currentViewport, projection },
+            drawParams: {
+              viewport: currentViewport,
+              projection: currentProjection,
+            },
           };
           packets.push(packet);
           keys.push(this.keyFromPacket(packet, getViewportId(currentViewport)));
@@ -235,7 +266,9 @@ export class BaglAdapter implements RenderAdapter {
   }
 
   private keyFromPacket(packet: DrawPacket, viewportId: number): PackedKey {
-    const bindingsId = packet.bindings.textureId ? hashString(packet.bindings.textureId) : 0;
+    const bindingsId = packet.bindings.textureId
+      ? hashString(packet.bindings.textureId)
+      : 0;
     const batch =
       packet.pipeline | (bindingsId << 8) | ((viewportId & 0xffff) << 16);
     return {
@@ -246,140 +279,87 @@ export class BaglAdapter implements RenderAdapter {
     };
   }
 
-  private ensureBatchBuffers(numVerts: number, pipeline: 0 | 1): void {
-    const needCapacity = Math.max(
-      BATCH_BUFFER_INITIAL_FLOATS / (pipeline === 0 ? 6 : 8),
-      numVerts
+  private ensureBatchBuffer(numFloats: number): void {
+    if (this.batchVertexBufferCapacity >= numFloats) return;
+    if (this.batchVertexBuffer) this.batchVertexBuffer.destroy();
+
+    this.batchVertexBufferCapacity = Math.max(
+      BATCH_BUFFER_INITIAL_FLOATS,
+      numFloats,
     );
-    if (this.batchCapacity >= needCapacity) return;
-
-    this.batchCapacity = needCapacity;
-    const posFloats = this.batchCapacity * 2;
-    const colorFloats = this.batchCapacity * 4;
-    const uvFloats = this.batchCapacity * 2;
-
-    if (this.batchPositionBuffer) this.batchPositionBuffer.destroy();
-    if (this.batchColorBuffer) this.batchColorBuffer.destroy();
-    if (this.batchUvBuffer) this.batchUvBuffer.destroy();
-
-    this.batchPositionData = new Float32Array(posFloats);
-    this.batchColorData = new Float32Array(colorFloats);
-    this.batchUvData = new Float32Array(uvFloats);
-
-    this.batchPositionBuffer = this.bagl.buffer({
-      data: this.batchPositionData,
-      size: 2,
-      usage: "stream",
-    });
-    this.batchColorBuffer = this.bagl.buffer({
-      data: this.batchColorData,
-      size: 4,
-      usage: "stream",
-    });
-    this.batchUvBuffer = this.bagl.buffer({
-      data: this.batchUvData,
+    this.batchVertexData = new Float32Array(this.batchVertexBufferCapacity);
+    this.batchVertexBuffer = this.bagl.buffer({
+      data: this.batchVertexData,
       size: 2,
       usage: "stream",
     });
   }
 
-  private mergeGroupVertices(
+  private uploadGroupVertices(
     group: DrawPacket[],
     frame: FrameCommands,
-    pipeline: 0 | 1
-  ): { merged: Float32Array; totalVerts: number; texture?: BaglTexture } | null {
-    const floatsPerVertex = pipeline === 0 ? SHAPES_FLOATS_PER_VERTEX : TEXTURED_FLOATS_PER_VERTEX;
+    pipeline: 0 | 1,
+  ): { totalVerts: number; texture?: BaglTexture } | null {
+    const floatsPerVertex =
+      pipeline === 0 ? SHAPES_FLOATS_PER_VERTEX : TEXTURED_FLOATS_PER_VERTEX;
     const src = pipeline === 0 ? frame.vertices : frame.texturedVertices;
     let texture: BaglTexture | undefined = undefined;
     if (pipeline === 1) {
       if (!src) return null;
       texture = group[0].bindings.textureId
-        ? this.textures.get(group[0].bindings.textureId) ?? undefined
+        ? (this.textures.get(group[0].bindings.textureId) ?? undefined)
         : undefined;
       if (!texture) return null;
     }
+
+    if (!src) return null;
+
     const totalVerts = group.reduce((s, p) => s + p.geometry.count, 0);
-    const merged = new Float32Array(totalVerts * floatsPerVertex);
+    const totalFloats = totalVerts * floatsPerVertex;
+    this.ensureBatchBuffer(totalFloats);
+
+    const batchData = this.batchVertexData!;
     let writeOffset = 0;
     for (const p of group) {
       const start = p.geometry.offset * floatsPerVertex;
       const len = p.geometry.count * floatsPerVertex;
-      merged.set(src!.subarray(start, start + len), writeOffset);
+      batchData.set(src.subarray(start, start + len), writeOffset);
       writeOffset += len;
     }
-    const result: { merged: Float32Array; totalVerts: number; texture?: BaglTexture } = { merged, totalVerts };
+
+    this.batchVertexBuffer!.subdata(batchData.subarray(0, totalFloats));
+    const result: { totalVerts: number; texture?: BaglTexture } = {
+      totalVerts,
+    };
     if (pipeline === 1) result.texture = texture;
     return result;
-  }
-
-  private deinterleaveShapes(merged: Float32Array, totalVerts: number): void {
-    const posData = this.batchPositionData!;
-    const colorData = this.batchColorData!;
-    for (let i = 0; i < totalVerts; i++) {
-      const o = i * 6;
-      posData[i * 2] = merged[o];
-      posData[i * 2 + 1] = merged[o + 1];
-      colorData[i * 4] = merged[o + 2];
-      colorData[i * 4 + 1] = merged[o + 3];
-      colorData[i * 4 + 2] = merged[o + 4];
-      colorData[i * 4 + 3] = merged[o + 5];
-    }
-    this.batchPositionBuffer!.subdata(posData.subarray(0, totalVerts * 2));
-    this.batchColorBuffer!.subdata(colorData.subarray(0, totalVerts * 4));
-  }
-
-  private deinterleaveTextured(merged: Float32Array, totalVerts: number): void {
-    const posData = this.batchPositionData!;
-    const colorData = this.batchColorData!;
-    const uvData = this.batchUvData!;
-    for (let i = 0; i < totalVerts; i++) {
-      const o = i * 8;
-      posData[i * 2] = merged[o];
-      posData[i * 2 + 1] = merged[o + 1];
-      colorData[i * 4] = merged[o + 2];
-      colorData[i * 4 + 1] = merged[o + 3];
-      colorData[i * 4 + 2] = merged[o + 4];
-      colorData[i * 4 + 3] = merged[o + 5];
-      uvData[i * 2] = merged[o + 6];
-      uvData[i * 2 + 1] = merged[o + 7];
-    }
-    this.batchPositionBuffer!.subdata(posData.subarray(0, totalVerts * 2));
-    this.batchColorBuffer!.subdata(colorData.subarray(0, totalVerts * 4));
-    this.batchUvBuffer!.subdata(uvData.subarray(0, totalVerts * 2));
   }
 
   private renderGroup(group: DrawPacket[], frame: FrameCommands) {
     if (group.length === 0) return;
     const first = group[0];
     const pipeline = first.pipeline as 0 | 1;
-    const viewport = first.drawParams.viewport ? this.toViewport(first.drawParams.viewport) : undefined;
+    const viewport = first.drawParams.viewport
+      ? this.toViewport(first.drawParams.viewport)
+      : undefined;
     const projection = first.drawParams.projection;
 
-    const mergedResult = this.mergeGroupVertices(group, frame, pipeline);
-    if (!mergedResult) return;
-    const { merged, totalVerts, texture } = mergedResult;
+    const uploadResult = this.uploadGroupVertices(group, frame, pipeline);
+    if (!uploadResult) return;
+    const { totalVerts, texture } = uploadResult;
 
-    this.ensureBatchBuffers(totalVerts, pipeline);
-    if (pipeline === 0) {
-      this.deinterleaveShapes(merged, totalVerts);
-    } else {
-      this.deinterleaveTextured(merged, totalVerts);
-    }
     this.drawCalls += 1;
 
     if (pipeline === 0) {
       this.drawShapes({
-        positions: this.batchPositionBuffer!,
-        colors: this.batchColorBuffer!,
+        vertices: this.batchVertexBuffer!,
         count: totalVerts,
         projection,
         viewport,
       });
     } else {
       this.drawText({
-        positions: this.batchPositionBuffer!,
-        colors: this.batchColorBuffer!,
-        uvs: this.batchUvBuffer!,
+        vertices: this.batchVertexBuffer!,
         count: totalVerts,
         projection,
         texture: texture!,
@@ -410,8 +390,18 @@ export class BaglAdapter implements RenderAdapter {
         }
       `,
       attributes: {
-        aPosition: (_ctx: unknown, props: any) => props.positions,
-        aColor: (_ctx: unknown, props: any) => props.colors,
+        aPosition: (_ctx: unknown, props: any): BaglAttributeDescriptor => ({
+          buffer: props.vertices,
+          size: 2,
+          stride: 24,
+          offset: 0,
+        }),
+        aColor: (_ctx: unknown, props: any): BaglAttributeDescriptor => ({
+          buffer: props.vertices,
+          size: 4,
+          stride: 24,
+          offset: 8,
+        }),
       },
       uniforms: {
         uProjectionMatrix: (_ctx: unknown, props: any) => props.projection,
@@ -456,9 +446,24 @@ export class BaglAdapter implements RenderAdapter {
         }
       `,
       attributes: {
-        aPosition: (_ctx: unknown, props: any) => props.positions,
-        aColor: (_ctx: unknown, props: any) => props.colors,
-        aUv: (_ctx: unknown, props: any) => props.uvs,
+        aPosition: (_ctx: unknown, props: any): BaglAttributeDescriptor => ({
+          buffer: props.vertices,
+          size: 2,
+          stride: 32,
+          offset: 0,
+        }),
+        aColor: (_ctx: unknown, props: any): BaglAttributeDescriptor => ({
+          buffer: props.vertices,
+          size: 4,
+          stride: 32,
+          offset: 8,
+        }),
+        aUv: (_ctx: unknown, props: any): BaglAttributeDescriptor => ({
+          buffer: props.vertices,
+          size: 2,
+          stride: 32,
+          offset: 24,
+        }),
       },
       uniforms: {
         uProjectionMatrix: (_ctx: unknown, props: any) => props.projection,
@@ -475,7 +480,10 @@ export class BaglAdapter implements RenderAdapter {
     return (props: any) => draw(props);
   }
 
-  private toClearColor(color: [number, number, number, number?], alpha: number) {
+  private toClearColor(
+    color: [number, number, number, number?],
+    alpha: number,
+  ) {
     const [r, g, b, a = 255] = color;
     return [r / 255, g / 255, b / 255, (a / 255) * alpha];
   }
@@ -491,12 +499,7 @@ export class BaglAdapter implements RenderAdapter {
   }
 
   private identity() {
-    return new Float32Array([
-      1, 0, 0, 0,
-      0, 1, 0, 0,
-      0, 0, 1, 0,
-      0, 0, 0, 1,
-    ]);
+    return new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
   }
 
   private orthoTopLeft(viewport: Viewport) {
@@ -513,10 +516,22 @@ export class BaglAdapter implements RenderAdapter {
     const nf = 1 / (near - far);
 
     return new Float32Array([
-      -2 * lr, 0, 0, 0,
-      0, -2 * bt, 0, 0,
-      0, 0, 2 * nf, 0,
-      (left + right) * lr, (top + bottom) * bt, (far + near) * nf, 1,
+      -2 * lr,
+      0,
+      0,
+      0,
+      0,
+      -2 * bt,
+      0,
+      0,
+      0,
+      0,
+      2 * nf,
+      0,
+      (left + right) * lr,
+      (top + bottom) * bt,
+      (far + near) * nf,
+      1,
     ]);
   }
 
