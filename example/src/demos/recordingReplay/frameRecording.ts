@@ -127,17 +127,14 @@ export type FrameRecording = {
       hardwarePixels: { w: number; h: number };
       logicalPixels: { x: number; y: number; w: number; h: number };
     };
-    projectionMatrix: string; // Base64-encoded Float32Array
-    modelViewMatrix: string; // Base64-encoded Float32Array
+    projectionMatrix: string;
+    modelViewMatrix: string;
   };
   commands: DrawCommand[];
   textRects: TextRect[];
   layers: LayerRecording[];
 };
 
-/**
- * Decode a base64-encoded Float32Array to a Float32Array
- */
 export function decodeFloatArray(encoded: string): Float32Array {
   const binary = atob(encoded);
   const bytes = new Uint8Array(binary.length);
@@ -147,9 +144,6 @@ export function decodeFloatArray(encoded: string): Float32Array {
   return new Float32Array(bytes.buffer);
 }
 
-/**
- * Decode a base64-encoded matrix (16 floats representing a 4x4 matrix)
- */
 export function decodeMatrix(encoded: string): Float32Array {
   return decodeFloatArray(encoded);
 }
