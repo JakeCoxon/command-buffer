@@ -12,20 +12,14 @@ import type {
  */
 export class PrebuiltFontAtlas implements FontAtlas {
   private readonly glyphs: Record<string, GlyphRenderData>;
-  private readonly textureSource: HTMLCanvasElement;
   readonly textureHandle: Texture;
   private readonly json: PrebuiltAtlasJson;
   private debugEnabled: boolean = false;
 
-  constructor(json: PrebuiltAtlasJson, textureSource: HTMLCanvasElement) {
+  constructor(json: PrebuiltAtlasJson, textureHandle: Texture) {
     this.json = json;
     this.glyphs = { ...json.glyphs };
-    this.textureSource = textureSource;
-    this.textureHandle = createTextureHandle({
-      id: json.textureId,
-      source: this.textureSource,
-      flipY: true,
-    });
+    this.textureHandle = textureHandle;
   }
 
   /**
@@ -47,7 +41,12 @@ export class PrebuiltFontAtlas implements FontAtlas {
 
     const { pixelWidth, pixelHeight } = json.atlas;
     const canvas = await loadImageToCanvas(imageUrl, pixelWidth, pixelHeight);
-    return new PrebuiltFontAtlas(json, canvas);
+    const textureHandle = createTextureHandle({
+      id: json.textureId,
+      source: canvas,
+      flipY: true,
+    });
+    return new PrebuiltFontAtlas(json, textureHandle);
   }
 
   setDebug(enabled: boolean): void {

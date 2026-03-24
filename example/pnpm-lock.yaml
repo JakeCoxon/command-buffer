@@ -8,12 +8,9 @@ importers:
 
   .:
     dependencies:
-      '@fontsource/roboto':
-        specifier: ^5.2.10
-        version: 5.2.10
       bagl-js:
-        specifier: ^0.1.1
-        version: 0.1.1
+        specifier: ^0.1.2
+        version: 0.1.2
       fontkit:
         specifier: ^2.0.4
         version: 2.0.4
@@ -168,9 +165,6 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  '@fontsource/roboto@5.2.10':
-    resolution: {integrity: sha512-8HlA5FtSfz//oFSr2eL7GFXAiE7eIkcGOtx7tjsLKq+as702x9+GU7K95iDeWFapHC4M2hv9RrpXKRTGGBI8Zg==}
-
   '@rollup/rollup-android-arm-eabi@4.57.1':
     resolution: {integrity: sha512-A6ehUVSiSaaliTxai040ZpZ2zTevHYbvu/lDoeAteHI8QnaosIzm4qwtezfRg1jOYaUmnzLX1AOD6Z+UJjtifg==}
     cpu: [arm]
@@ -302,8 +296,8 @@ packages:
   '@types/estree@1.0.8':
     resolution: {integrity: sha512-dWHzHa2WqEXI/O1E9OjrocMTKJl2mSrEolh1Iomrv6U+JuNwaHXsXx9bLu5gG7BUWFIN0skIQJQ/L1rIex4X6w==}
 
-  bagl-js@0.1.1:
-    resolution: {integrity: sha512-8thVTkj6yXF7Sr73k+fc6e4ps3GoIqyFPGk+SG6OJEqibH3E3vNv3yrwm5QLPjxBjfMUFcN6JJUqFkUiZNFiDg==}
+  bagl-js@0.1.2:
+    resolution: {integrity: sha512-Wjwdc1Mt5uYpCaFlmyHGf4Db2b9MtaBA2oQScR+vJs71Jyx6O1uLyWAkSH/Zxr+q08oMpevYrZXOnGqB/kpkFg==}
 
   base64-js@1.5.1:
     resolution: {integrity: sha512-AKpaYlHn8t4SVbOHCy+b5+KKgvR4vrsD8vbvrbiQJps7fKDTkjkDry6ji0rUJjC0kzbNePLwzxq8iypo41qeWA==}
@@ -483,8 +477,6 @@ snapshots:
   '@esbuild/win32-x64@0.21.5':
     optional: true
 
-  '@fontsource/roboto@5.2.10': {}
-
   '@rollup/rollup-android-arm-eabi@4.57.1':
     optional: true
 
@@ -566,7 +558,7 @@ snapshots:
 
   '@types/estree@1.0.8': {}
 
-  bagl-js@0.1.1: {}
+  bagl-js@0.1.2: {}
 
   base64-js@1.5.1: {}
 

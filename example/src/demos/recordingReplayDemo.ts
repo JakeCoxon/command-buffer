@@ -1,4 +1,3 @@
-import "@fontsource/roboto";
 import createREGL from "regl";
 import { CommandBuffer } from "../../../src/commandBuffer";
 import { ReglAdapter } from "../../../src/adapters/reglAdapter";
