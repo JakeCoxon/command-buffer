@@ -34,6 +34,11 @@ export function createTextAtlasDemo(context: DemoCreateContext): DemoInstance {
   let debugAtlasIndex = 0;
   let activeFontAtlas: FontAtlas;
 
+  /** Shared string for the per-atlas metrics debug rows (baseline / ascend / descend overlays). */
+  let debugSampleText = "Hg";
+  const debugSampleCharset = "gjpqyQW@|01";
+  let debugSampleCharsetIndex = 0;
+
   const canvasFontAtlas = new CanvasFontAtlas(
     "Roboto, system-ui, sans-serif",
     24,
@@ -41,7 +46,7 @@ export function createTextAtlasDemo(context: DemoCreateContext): DemoInstance {
     256,
     256,
     context.initialSize.pixelRatio,
-    1
+    2
   );
   atlasOptions.push({ label: "CanvasFontAtlas", atlas: canvasFontAtlas });
   activeFontAtlas = canvasFontAtlas;
@@ -54,6 +59,18 @@ export function createTextAtlasDemo(context: DemoCreateContext): DemoInstance {
   atlasSelect.className = "demo-control-select";
   atlasSelectLabel.appendChild(atlasSelect);
   context.controlsRoot.appendChild(atlasSelectLabel);
+
+  const addSampleCharBtn = document.createElement("button");
+  addSampleCharBtn.type = "button";
+  addSampleCharBtn.className = "demo-control-btn";
+  addSampleCharBtn.textContent = "Add character to sample";
+  const onAddSampleChar = () => {
+    const c = debugSampleCharset[debugSampleCharsetIndex % debugSampleCharset.length] ?? "?";
+    debugSampleCharsetIndex += 1;
+    debugSampleText += c;
+  };
+  addSampleCharBtn.addEventListener("click", onAddSampleChar);
+  context.controlsRoot.appendChild(addSampleCharBtn);
 
   const gradientTexture = createTextureHandle({
     id: "opacity-gradient",
@@ -129,11 +146,11 @@ export function createTextAtlasDemo(context: DemoCreateContext): DemoInstance {
     startY: number,
     sampleColor: [number, number, number, number]
   ): void {
-    const sample = "Hg";
+    const sample = debugSampleText;
     const scale = 10;
     const x = 50;
     renderer.setFontAtlas(atlas);
-    renderer.drawText(title, x, startY - 18, [180, 180, 200, 255]);
+    renderer.drawText(title, x, startY - 18 * scale, [180, 180, 200, 255]);
     renderer.drawText(sample, x, startY, sampleColor, undefined, scale);
 
     const runWidth = renderer.measureText(sample) * scale;
@@ -167,7 +184,7 @@ export function createTextAtlasDemo(context: DemoCreateContext): DemoInstance {
 
   function render(time: number): void {
     const start = performance.now();
-    renderer.beginFrame([24, 24, 28, 255]);
+    renderer.beginFrame([24, 24, 28, 255], 1);
 
     activeFontAtlas = atlasOptions[0].atlas;
     renderer.setFontAtlas(activeFontAtlas);
@@ -189,8 +206,8 @@ export function createTextAtlasDemo(context: DemoCreateContext): DemoInstance {
       gradientTexture
     );
 
-    let y = 260;
-    const gap = 220;
+    let y = 460;
+    const gap = 320;
     atlasOptions.forEach((option, index) => {
       drawMetricsDemoForAtlas(
         option.atlas,
@@ -229,6 +246,7 @@ export function createTextAtlasDemo(context: DemoCreateContext): DemoInstance {
     getStatsLines: () => statsLines,
     destroy: () => {
       atlasSelect.removeEventListener("change", onAtlasChange);
+      addSampleCharBtn.removeEventListener("click", onAddSampleChar);
       debugView.destroy();
       if (typeof regl.destroy === "function") {
         regl.destroy();

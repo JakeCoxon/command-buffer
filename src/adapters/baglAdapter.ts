@@ -3,6 +3,7 @@ import { batchCommands } from "../batchCommands";
 import type { DrawPacket, PackedKey } from "../drawPacket";
 import { Viewport, type Texture } from "../types";
 import { type RenderAdapter } from "../adapter";
+import { BufferHandle, Texture2DHandle, type Bagl } from "bagl-js";
 
 function hashString(s: string): number {
   let h = 0;
@@ -18,40 +19,12 @@ function viewportToKey(viewport: Viewport | null): string {
   return `${rect.x},${rect.y},${rect.w},${rect.h},${pixelRatio ?? 1}`;
 }
 
-type BaglBuffer = {
-  subdata: (data: ArrayBufferView, byteOffset?: number) => void;
-  destroy: () => void;
-  size: number;
-  data: ArrayBufferView;
-};
-
-type BaglTexture = {
-  update: (opts: {
-    data?: unknown;
-    width?: number;
-    height?: number;
-    format?: string;
-    premultiplyAlpha?: boolean;
-    flipY?: boolean;
-  }) => void;
-  destroy: () => void;
-};
-
+// TODO: Export type from bagl-js
 type BaglAttributeDescriptor = {
-  buffer: BaglBuffer;
+  buffer: BufferHandle;
   size?: number;
   stride?: number;
   offset?: number;
-};
-
-type BaglLike = ((config: any) => (props?: any) => void) & {
-  clear: (options: { color?: number[]; depth?: number }) => void;
-  texture: (config: any) => BaglTexture;
-  buffer: (config: {
-    data: ArrayBufferView;
-    size: number;
-    usage?: string;
-  }) => BaglBuffer;
 };
 
 type BaglAdapterOptions = {
@@ -64,22 +37,22 @@ const TEXTURED_FLOATS_PER_VERTEX = 8;
 
 export class BaglAdapter implements RenderAdapter {
   private readonly drawShapes: (props: {
-    vertices: BaglBuffer;
+    vertices: BufferHandle;
     count: number;
     projection: Float32Array;
     viewport?: { x: number; y: number; width: number; height: number };
   }) => void;
   private readonly drawText: (props: {
-    vertices: BaglBuffer;
+    vertices: BufferHandle;
     count: number;
     projection: Float32Array;
-    texture: BaglTexture;
+    texture: Texture2DHandle;
     viewport?: { x: number; y: number; width: number; height: number };
   }) => void;
-  private readonly textures: Map<string, BaglTexture> = new Map();
+  private readonly textures: Map<string, Texture2DHandle> = new Map();
   private surfaceSize: { w: number; h: number } | null = null;
 
-  private batchVertexBuffer: BaglBuffer | null = null;
+  private batchVertexBuffer: BufferHandle | null = null;
   private batchVertexData: Float32Array | null = null;
   private batchVertexBufferCapacity = 0;
 
@@ -88,7 +61,7 @@ export class BaglAdapter implements RenderAdapter {
   drawCalls: number = 0;
 
   constructor(
-    private readonly bagl: BaglLike,
+    private readonly bagl: Bagl,
     private readonly options: BaglAdapterOptions = {},
   ) {
     this.drawShapes = this.createShapePipeline();
@@ -113,7 +86,8 @@ export class BaglAdapter implements RenderAdapter {
         data: source,
         mag: "linear",
         min: "linear",
-        wrap: "clamp",
+        wrapS: "clamp",
+        wrapT: "clamp",
         flipY,
         format: "rgba",
         // Keep atlas uploads in straight-alpha form to match vertex colors and
@@ -123,11 +97,15 @@ export class BaglAdapter implements RenderAdapter {
       this.textures.set(texture.id, baglTex);
       texture.lastUploadedVersion = texture.version;
     } else if (needsUpload) {
-      existing.update({
+      existing({
         data: source,
         format: "rgba",
         premultiplyAlpha: false,
         flipY,
+        mag: "linear",
+        min: "linear",
+        wrapS: "clamp",
+        wrapT: "clamp",
       });
       texture.lastUploadedVersion = texture.version;
     }
@@ -299,11 +277,11 @@ export class BaglAdapter implements RenderAdapter {
     group: DrawPacket[],
     frame: FrameCommands,
     pipeline: 0 | 1,
-  ): { totalVerts: number; texture?: BaglTexture } | null {
+  ): { totalVerts: number; texture?: Texture2DHandle } | null {
     const floatsPerVertex =
       pipeline === 0 ? SHAPES_FLOATS_PER_VERTEX : TEXTURED_FLOATS_PER_VERTEX;
     const src = pipeline === 0 ? frame.vertices : frame.texturedVertices;
-    let texture: BaglTexture | undefined = undefined;
+    let texture: Texture2DHandle | undefined = undefined;
     if (pipeline === 1) {
       if (!src) return null;
       texture = group[0].bindings.textureId
@@ -328,7 +306,7 @@ export class BaglAdapter implements RenderAdapter {
     }
 
     this.batchVertexBuffer!.subdata(batchData.subarray(0, totalFloats));
-    const result: { totalVerts: number; texture?: BaglTexture } = {
+    const result: { totalVerts: number; texture?: Texture2DHandle } = {
       totalVerts,
     };
     if (pipeline === 1) result.texture = texture;
@@ -485,7 +463,7 @@ export class BaglAdapter implements RenderAdapter {
     alpha: number,
   ) {
     const [r, g, b, a = 255] = color;
-    return [r / 255, g / 255, b / 255, (a / 255) * alpha];
+    return [r / 255, g / 255, b / 255, (a / 255) * alpha] as [number, number, number, number];
   }
 
   private getProjection(viewport: Viewport | null): Float32Array {
