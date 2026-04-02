@@ -6,9 +6,7 @@ import type { DemoCreateContext, DemoInstance, DemoSize } from "../app/types";
 export function createColoredDemoModule(context: DemoCreateContext): DemoInstance {
   const regl = createREGL({ canvas: context.canvas }) as any;
   const adapter = new ReglAdapter(regl as any);
-  const renderer = new Renderer(adapter, {
-    viewport: { rect: { x: 0, y: 0, w: 0, h: 0 }, pixelRatio: context.initialSize.pixelRatio },
-  });
+  const renderer = new Renderer(adapter);
 
   const fontAtlas = new CanvasFontAtlas(
     "system-ui",
@@ -82,16 +80,16 @@ export function createColoredDemoModule(context: DemoCreateContext): DemoInstanc
 
   function resize(nextSize: DemoSize): void {
     size = nextSize;
-    renderer.setViewport({
-      rect: { x: 0, y: 0, w: size.width, h: size.height },
-      pixelRatio: size.pixelRatio,
-    });
     sceneFbo.resize(Math.floor(size.width * size.pixelRatio), Math.floor(size.height * size.pixelRatio));
   }
 
   function render(time: number): void {
+    regl.clear({ color: [0, 0, 0, 1] });
     renderer.setFontAtlas(fontAtlas);
-    renderer.beginFrame([24, 24, 28, 255]);
+    renderer.beginFrame({
+      rect: { x: 0, y: 0, w: size.width, h: size.height },
+      pixelRatio: size.pixelRatio,
+    });
     drawColoredDemo(renderer, time, size.width, size.height);
 
     const start = performance.now();

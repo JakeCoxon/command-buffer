@@ -5,10 +5,6 @@ import { type RenderAdapter } from "./adapter";
 import { Viewport, Color, Rect, Texture } from "./types";
 import { FrameCommands } from "./commands";
 
-export interface RendererOptions {
-  viewport: Viewport;
-}
-
 /**
  * High-level rendering API that coordinates CommandBuffer, TextRenderer,
  * FontAtlas, and adapter lifecycle.
@@ -19,11 +15,11 @@ export class Renderer {
   private textRenderer: TextRenderer;
   private adapter: RenderAdapter;
 
-  constructor(adapter: RenderAdapter, options: RendererOptions) {
+  constructor(adapter: RenderAdapter) {
     this.adapter = adapter;
     
     // Initialize CommandBuffer
-    this.commandBuffer = new CommandBuffer(options.viewport);
+    this.commandBuffer = new CommandBuffer();
     this.textRenderer = new TextRenderer(this.commandBuffer);
   }
 
@@ -39,8 +35,9 @@ export class Renderer {
   /**
    * Begin a new frame - call this at the start of each render loop
    */
-  beginFrame(clearColor?: Color, alpha?: number): void {
-    this.commandBuffer.clear(clearColor || [0, 0, 0, 255], alpha || 1);
+  beginFrame(viewport: Viewport): void {
+    this.commandBuffer.reset();
+    this.commandBuffer.setViewport(viewport);
   }
 
   /**

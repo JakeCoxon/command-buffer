@@ -6,9 +6,7 @@ import type { DemoCreateContext, DemoInstance, DemoSize } from "../app/types";
 export function createSciFiDemoModule(context: DemoCreateContext): DemoInstance {
   const regl = createREGL({ canvas: context.canvas }) as any;
   const adapter = new ReglAdapter(regl as any);
-  const renderer = new Renderer(adapter, {
-    viewport: { rect: { x: 0, y: 0, w: 0, h: 0 }, pixelRatio: context.initialSize.pixelRatio },
-  });
+  const renderer = new Renderer(adapter);
 
   const fontAtlas = new CanvasFontAtlas(
     "ui-monospace, monospace",
@@ -115,12 +113,16 @@ export function createSciFiDemoModule(context: DemoCreateContext): DemoInstance 
 
   function render(time: number): void {
     renderer.setFontAtlas(fontAtlas);
-    renderer.beginFrame([0, 0, 0, 255]);
+    renderer.beginFrame({
+      rect: { x: 0, y: 0, w: size.width, h: size.height },
+      pixelRatio: size.pixelRatio,
+    });
     drawSciFiDemo(renderer, time, size.width, size.height, sciFiStats);
 
     const start = performance.now();
     let frame!: FrameCommands;
     regl({ framebuffer: sceneFbo })(() => {
+      regl.clear({ color: [0, 0, 0, 1] });
       frame = renderer.endFrame();
     });
     const end = performance.now();

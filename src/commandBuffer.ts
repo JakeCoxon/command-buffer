@@ -10,18 +10,14 @@ export class CommandBuffer {
   private currentViewport: Viewport | null = null;
   private usedTextures = new Map<string, Texture>();
 
-  constructor(private readonly defaultViewport: Viewport) {
-    this.currentViewport = defaultViewport;
-    this.commands.push({ type: "setViewport", viewport: defaultViewport });
+  constructor() {
   }
 
-  reset(viewport: Viewport = this.defaultViewport) {
+  reset() {
     this.vertices.length = 0;
     this.texturedVertices.length = 0;
     this.commands.length = 0;
     this.usedTextures.clear();
-    this.currentViewport = viewport;
-    this.commands.push({ type: "setViewport", viewport });
   }
 
   clear(color: Color, alpha = 1) {
@@ -52,7 +48,7 @@ export class CommandBuffer {
       result.texturedVertices = new Float32Array(this.texturedVertices);
     }
 
-    this.reset(this.currentViewport ?? this.defaultViewport);
+    this.reset();
     return result;
   }
 

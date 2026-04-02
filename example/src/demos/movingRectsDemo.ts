@@ -32,9 +32,7 @@ function randomColor(): [number, number, number, number] {
 export function createMovingRectsDemo(context: DemoCreateContext): DemoInstance {
   const bagl = createBagl({ canvas: context.canvas });
   const adapter = new BaglAdapter(bagl as any);
-  const renderer = new Renderer(adapter, {
-    viewport: { rect: { x: 0, y: 0, w: 0, h: 0 }, pixelRatio: context.initialSize.pixelRatio },
-  });
+  const renderer = new Renderer(adapter);
 
   const fontAtlas = new CanvasFontAtlas(
     "ui-monospace, monospace",
@@ -132,7 +130,10 @@ export function createMovingRectsDemo(context: DemoCreateContext): DemoInstance 
     const mouseRecentlyMoved = mouse.active && time - mouse.lastMoveTime < 150;
 
     renderer.setFontAtlas(fontAtlas);
-    renderer.beginFrame([24, 24, 28, 255]);
+    renderer.beginFrame({
+      rect: { x: 0, y: 0, w: size.width, h: size.height },
+      pixelRatio: size.pixelRatio,
+    });
 
     if (rects.length === 0) {
       initRects();

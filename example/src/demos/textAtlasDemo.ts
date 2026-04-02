@@ -23,9 +23,7 @@ type AtlasOption = {
 export function createTextAtlasDemo(context: DemoCreateContext): DemoInstance {
   const regl = createREGL({ canvas: context.canvas }) as any;
   const adapter = new ReglAdapter(regl as any);
-  const renderer = new Renderer(adapter, {
-    viewport: { rect: { x: 0, y: 0, w: 0, h: 0 }, pixelRatio: context.initialSize.pixelRatio },
-  });
+  const renderer = new Renderer(adapter);
 
   const debugView = new TextDebugView();
   const atlasOptions: AtlasOption[] = [];
@@ -184,7 +182,10 @@ export function createTextAtlasDemo(context: DemoCreateContext): DemoInstance {
 
   function render(time: number): void {
     const start = performance.now();
-    renderer.beginFrame([24, 24, 28, 255], 1);
+    renderer.beginFrame({
+      rect: { x: 0, y: 0, w: size.width, h: size.height },
+      pixelRatio: size.pixelRatio,
+    });
 
     activeFontAtlas = atlasOptions[0].atlas;
     renderer.setFontAtlas(activeFontAtlas);

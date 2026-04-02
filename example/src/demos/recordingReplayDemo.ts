@@ -15,7 +15,7 @@ export function createRecordingReplayDemo(context: DemoCreateContext): DemoInsta
     pixelRatio: context.initialSize.pixelRatio,
   };
 
-  let commandBuffer: CommandBuffer | null = new CommandBuffer(defaultViewport);
+  let commandBuffer: CommandBuffer | null = new CommandBuffer();
   let recordingPlayer: RecordingPlayer | null = null;
   let recording: FrameRecording | null = null;
   let dirty = true;
@@ -66,7 +66,7 @@ export function createRecordingReplayDemo(context: DemoCreateContext): DemoInsta
     const start = performance.now();
     const viewport = createViewportFromRecording(recording);
 
-    commandBuffer.reset(viewport);
+    commandBuffer.reset();
     recordingPlayer.play(commandBuffer);
     const frame = commandBuffer.flush();
     adapter.render(frame);
@@ -94,7 +94,7 @@ export function createRecordingReplayDemo(context: DemoCreateContext): DemoInsta
 
       recordingPlayer = new RecordingPlayer();
       recordingPlayer.loadRecording(loaded);
-      commandBuffer = new CommandBuffer(createViewportFromRecording(loaded));
+      commandBuffer = new CommandBuffer();
 
       dirty = true;
       setStatusLines([
@@ -121,10 +121,7 @@ export function createRecordingReplayDemo(context: DemoCreateContext): DemoInsta
   function onResize(nextSize: DemoSize): void {
     size = nextSize;
     if (!recording && commandBuffer) {
-      commandBuffer.reset({
-        rect: { x: 0, y: 0, w: size.width, h: size.height },
-        pixelRatio: size.pixelRatio,
-      });
+      commandBuffer.reset();
       dirty = true;
     }
   }
