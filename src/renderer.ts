@@ -2,8 +2,10 @@ import { CommandBuffer } from "./commandBuffer";
 import { TextRenderer } from "./textRenderer";
 import { type FontAtlas } from "./fontAtlas";
 import { type RenderAdapter } from "./adapter";
-import { Viewport, Color, Rect, Texture } from "./types";
+import { Viewport, Color, Rect, Texture, Transform } from "./types";
 import { FrameCommands } from "./commands";
+import { ArcShape, LineSegmentShape, PaintedShape, QuadShape, RectShape, TransformedShape, TriangleShape } from "./drawFunctions";
+import { TransformStack } from "./transform";
 
 /**
  * High-level rendering API that coordinates CommandBuffer, TextRenderer,
@@ -14,6 +16,9 @@ export class Renderer {
   public fontAtlas: FontAtlas | null = null;
   private textRenderer: TextRenderer;
   private adapter: RenderAdapter;
+
+  private transformStack: TransformStack = new TransformStack();
+  private currentTransform: Transform = [1, 0, 0, 1, 0, 0];
 
   constructor(adapter: RenderAdapter) {
     this.adapter = adapter;
@@ -57,43 +62,118 @@ export class Renderer {
     this.commandBuffer.setViewport(viewport);
   }
 
+  save() { this.transformStack.save() }
+  restore() { this.currentTransform = this.transformStack.pop(); }
+  translate(x: number, y: number) { this.currentTransform = this.transformStack.translate(x, y); }
+  scale(x: number, y: number) { this.currentTransform = this.transformStack.scale(x, y); }
+  rotate(angle: number) { this.currentTransform = this.transformStack.rotate(angle); }
+  resetTransform() { this.currentTransform = this.transformStack.reset(); }
+
   // Delegate drawing methods to CommandBuffer
   drawRect(rect: Rect, color: Color): void {
-    this.commandBuffer.drawRect(rect, color);
+    const offset = this.commandBuffer.beginDraw();
+    const transformedShape = new TransformedShape(new RectShape(rect.x, rect.y, rect.w, rect.h), this.currentTransform);
+    const paintedShape = new PaintedShape(transformedShape, { transform: this.currentTransform, fillColor: color });
+    paintedShape.paint(this.commandBuffer);
+    this.commandBuffer.endDraw(offset);
   }
 
   drawRoundedRect(rect: Rect, radius: number, color: Color, segments?: number): void {
-    this.commandBuffer.drawRoundedRect(rect, radius, color, segments);
+    const offset = this.commandBuffer.beginDraw();
+    const transformedShape = new TransformedShape(new RectShape(rect.x, rect.y, rect.w, rect.h, radius), this.currentTransform);
+    const paintedShape = new PaintedShape(transformedShape, { transform: this.currentTransform, fillColor: color });
+    paintedShape.paint(this.commandBuffer);
+    this.commandBuffer.endDraw(offset);
   }
 
   drawCircle(x: number, y: number, radius: number, color: Color, segments?: number): void {
-    this.commandBuffer.drawCircle(x, y, radius, color, segments);
+    const offset = this.commandBuffer.beginDraw();
+    const transformedShape = new TransformedShape(new ArcShape(x, y, radius, 0, Math.PI * 2), this.currentTransform);
+    const paintedShape = new PaintedShape(transformedShape, { transform: this.currentTransform, fillColor: color });
+    paintedShape.paint(this.commandBuffer);
+    this.commandBuffer.endDraw(offset);
   }
 
   drawArc(x: number, y: number, radius: number, startAngle: number, endAngle: number, color: Color, segments?: number): void {
-    this.commandBuffer.drawArc(x, y, radius, startAngle, endAngle, color, segments);
+    const offset = this.commandBuffer.beginDraw();
+    const transformedShape = new TransformedShape(new ArcShape(x, y, radius, startAngle, endAngle), this.currentTransform);
+    const paintedShape = new PaintedShape(transformedShape, { transform: this.currentTransform, fillColor: color });
+    paintedShape.paint(this.commandBuffer);
+    this.commandBuffer.endDraw(offset);
   }
 
   drawLine(x1: number, y1: number, x2: number, y2: number, thickness: number, color: Color): void {
-    this.commandBuffer.drawLine(x1, y1, x2, y2, thickness, color);
+    const offset = this.commandBuffer.beginDraw();
+    const transformedShape = new TransformedShape(new LineSegmentShape(x1, y1, x2, y2), this.currentTransform);
+    const paintedShape = new PaintedShape(transformedShape, { transform: this.currentTransform, strokeColor: color, strokeWidth: thickness });
+    paintedShape.paint(this.commandBuffer);
+    this.commandBuffer.endDraw(offset);
   }
 
   drawCircleOutline(x: number, y: number, radius: number, lineWidth: number, color: Color, segments?: number): void {
-    this.commandBuffer.drawCircleOutline(x, y, radius, lineWidth, color, segments);
+    const offset = this.commandBuffer.beginDraw();
+    const transformedShape = new TransformedShape(new ArcShape(x, y, radius, 0, Math.PI * 2), this.currentTransform);
+    const paintedShape = new PaintedShape(transformedShape, { transform: this.currentTransform, strokeColor: color, strokeWidth: lineWidth });
+    paintedShape.paint(this.commandBuffer);
+    this.commandBuffer.endDraw(offset);
   }
 
   drawArcOutline(x: number, y: number, radius: number, startAngle: number, endAngle: number, lineWidth: number, color: Color, segments?: number): void {
-    this.commandBuffer.drawArcOutline(x, y, radius, startAngle, endAngle, lineWidth, color, segments);
+    const offset = this.commandBuffer.beginDraw();
+    const transformedShape = new TransformedShape(new ArcShape(x, y, radius, startAngle, endAngle), this.currentTransform);
+    const paintedShape = new PaintedShape(transformedShape, { transform: this.currentTransform, strokeColor: color, strokeWidth: lineWidth });
+    paintedShape.paint(this.commandBuffer);
+    this.commandBuffer.endDraw(offset);
   }
 
   drawRectOutline(rect: Rect, lineWidth: number, color: Color): void {
-    this.commandBuffer.drawRectOutline(rect, lineWidth, color);
+    const offset = this.commandBuffer.beginDraw();
+    const transformedShape = new TransformedShape(new RectShape(rect.x, rect.y, rect.w, rect.h), this.currentTransform);
+    const paintedShape = new PaintedShape(transformedShape, { transform: this.currentTransform, strokeColor: color, strokeWidth: lineWidth });
+    paintedShape.paint(this.commandBuffer);
+    this.commandBuffer.endDraw(offset);
   }
 
   drawRoundedRectOutline(rect: Rect, radius: number, lineWidth: number, color: Color, segments?: number): void {
-    this.commandBuffer.drawRoundedRectOutline(rect, radius, lineWidth, color, segments);
+    const offset = this.commandBuffer.beginDraw();
+    const transformedShape = new TransformedShape(new RectShape(rect.x, rect.y, rect.w, rect.h, radius), this.currentTransform);
+    const paintedShape = new PaintedShape(transformedShape, { transform: this.currentTransform, strokeColor: color, strokeWidth: lineWidth });
+    paintedShape.paint(this.commandBuffer);
+    this.commandBuffer.endDraw(offset);
   }
 
+  drawTriangle(x1: number, y1: number, x2: number, y2: number, x3: number, y3: number, color: Color): void {
+    const offset = this.commandBuffer.beginDraw();
+    const transformedShape = new TransformedShape(new TriangleShape(x1, y1, x2, y2, x3, y3), this.currentTransform);
+    const paintedShape = new PaintedShape(transformedShape, { transform: this.currentTransform, fillColor: color });
+    paintedShape.paint(this.commandBuffer);
+    this.commandBuffer.endDraw(offset);
+  }
+
+  drawTriangleOutline(x1: number, y1: number, x2: number, y2: number, x3: number, y3: number, lineWidth: number, color: Color): void {
+    const offset = this.commandBuffer.beginDraw();
+    const transformedShape = new TransformedShape(new TriangleShape(x1, y1, x2, y2, x3, y3), this.currentTransform);
+    const paintedShape = new PaintedShape(transformedShape, { transform: this.currentTransform, strokeColor: color, strokeWidth: lineWidth });
+    paintedShape.paint(this.commandBuffer);
+    this.commandBuffer.endDraw(offset);
+  }
+
+  drawQuad(x1: number, y1: number, x2: number, y2: number, x3: number, y3: number, x4: number, y4: number, color: Color): void {
+    const offset = this.commandBuffer.beginDraw();
+    const transformedShape = new TransformedShape(new QuadShape(x1, y1, x2, y2, x3, y3, x4, y4), this.currentTransform);
+    const paintedShape = new PaintedShape(transformedShape, { transform: this.currentTransform, fillColor: color });
+    paintedShape.paint(this.commandBuffer);
+    this.commandBuffer.endDraw(offset);
+  }
+
+  drawQuadOutline(x1: number, y1: number, x2: number, y2: number, x3: number, y3: number, x4: number, y4: number, lineWidth: number, color: Color): void {
+    const offset = this.commandBuffer.beginDraw();
+    const transformedShape = new TransformedShape(new QuadShape(x1, y1, x2, y2, x3, y3, x4, y4), this.currentTransform);
+    const paintedShape = new PaintedShape(transformedShape, { transform: this.currentTransform, strokeColor: color, strokeWidth: lineWidth });
+    paintedShape.paint(this.commandBuffer);
+    this.commandBuffer.endDraw(offset);
+  }
+  
   /**
    * Draw a textured rectangle
    */
@@ -103,7 +183,7 @@ export class Renderer {
     color: Color,
     texture: Texture
   ): void {
-    this.commandBuffer.drawTexturedRect(rect, uv, color, texture);
+    // this.commandBuffer.drawTexturedRect(rect, uv, color, texture);
   }
 
   // Delegate text methods to TextRenderer
@@ -112,13 +192,12 @@ export class Renderer {
     x: number,
     y: number,
     color?: [number, number, number, number?],
-    lineHeight?: number,
     scale?: number
   ): void {
     if (!this.textRenderer) {
       throw new Error("Font atlas not set. Set renderer.fontAtlas before drawing text.");
     }
-    this.textRenderer.drawText(text, x, y, color, lineHeight, scale ?? 1);
+    this.textRenderer.drawText(text, x, y, color, scale ?? 1);
   }
 
   drawTextWrapped(
@@ -127,12 +206,12 @@ export class Renderer {
     y: number,
     maxWidth: number,
     color?: [number, number, number, number?],
-    lineHeight?: number
+    scale?: number
   ): void {
     if (!this.fontAtlas) {
       throw new Error("Font atlas not set. Set renderer.fontAtlas before drawing text.");
     }
-    this.textRenderer.drawTextWrapped(text, x, y, maxWidth, color, lineHeight);
+    this.textRenderer.drawTextWrapped(text, x, y, maxWidth, color, scale ?? 1);
   }
 
   measureText(text: string): number {

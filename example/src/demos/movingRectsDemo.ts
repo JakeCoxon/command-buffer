@@ -26,7 +26,7 @@ function rand(min: number, max: number): number {
 }
 
 function randomColor(): [number, number, number, number] {
-  return [rand(0, 256) | 0, rand(0, 256) | 0, rand(0, 256) | 0, 255];
+  return [rand(0, 1), rand(0, 1), rand(0, 1), 1];
 }
 
 export function createMovingRectsDemo(context: DemoCreateContext): DemoInstance {
@@ -174,7 +174,7 @@ export function createMovingRectsDemo(context: DemoCreateContext): DemoInstance 
         r.y = Math.max(0, Math.min(size.height - r.h, r.y));
       }
       renderer.drawRect({ x: r.x, y: r.y, w: r.w, h: r.h }, r.color);
-      renderer.drawText(`${Math.round(r.x)},${Math.round(r.y)}`, r.x, r.y, [255, 255, 255, 255]);
+      renderer.drawText(`${Math.round(r.x)},${Math.round(r.y)}`, r.x, r.y, [1, 1, 1, 1]);
     }
 
     const start = performance.now();

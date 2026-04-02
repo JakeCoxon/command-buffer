@@ -1,5 +1,10 @@
 export type Color = [number, number, number, number?];
 
+export type Point = [number, number];
+
+export type Transform = [a: number, b: number, c: number, d: number, e: number, f: number];
+
+
 /**
  * Types that can be uploaded to WebGL as a 2D texture source.
  */

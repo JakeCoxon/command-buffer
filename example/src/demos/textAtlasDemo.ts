@@ -149,7 +149,7 @@ export function createTextAtlasDemo(context: DemoCreateContext): DemoInstance {
     const x = 50;
     renderer.setFontAtlas(atlas);
     renderer.drawText(title, x, startY - 18 * scale, [180, 180, 200, 255]);
-    renderer.drawText(sample, x, startY, sampleColor, undefined, scale);
+    renderer.drawText(sample, x, startY, sampleColor, scale);
 
     const runWidth = renderer.measureText(sample) * scale;
     const lineMetrics = renderer.getLineMetrics(sample);
@@ -166,13 +166,13 @@ export function createTextAtlasDemo(context: DemoCreateContext): DemoInstance {
       const gw = m.width * scale;
       const gh = (m.ascend + m.descend) * scale;
       const gy = startY - m.ascend * scale;
-      renderer.drawRectOutline({ x: glyphX, y: gy, w: gw, h: gh }, 1, [220, 180, 220, 255]);
+      renderer.drawRectOutline({ x: glyphX, y: gy, w: gw, h: gh }, 1, [0.9, 0.7, 0.3, 1]);
       glyphX += m.width * scale;
     }
 
-    renderer.drawLine(x, startY, x2, startY, 1.5, [255, 180, 80, 255]);
-    renderer.drawLine(x, startY - ascend, x2, startY - ascend, 1.5, [80, 220, 120, 255]);
-    renderer.drawLine(x, startY + descend, x2, startY + descend, 1.5, [80, 140, 255, 255]);
+    renderer.drawLine(x, startY, x2, startY, 1.5, [0.9, 0.7, 0.3, 1]);
+    renderer.drawLine(x, startY - ascend, x2, startY - ascend, 1.5, [0.3, 0.9, 0.5, 1]);
+    renderer.drawLine(x, startY + descend, x2, startY + descend, 1.5, [0.3, 0.6, 0.9, 1]);
     renderer.drawRectOutline(
       { x, y: startY - ascend, w: runWidth, h: ascend + descend },
       1.5,
@@ -190,8 +190,8 @@ export function createTextAtlasDemo(context: DemoCreateContext): DemoInstance {
     activeFontAtlas = atlasOptions[0].atlas;
     renderer.setFontAtlas(activeFontAtlas);
 
-    const titleColor: [number, number, number, number] = [100, 200, 255, 255];
-    const bodyColor: [number, number, number, number] = [200, 220, 255, 255];
+    const titleColor: [number, number, number, number] = [0.4, 0.8, 1, 1];
+    const bodyColor: [number, number, number, number] = [0.8, 0.9, 1, 1];
 
     renderer.drawText("Font Atlas Text Rendering", 50, 50, titleColor);
 
@@ -203,7 +203,7 @@ export function createTextAtlasDemo(context: DemoCreateContext): DemoInstance {
     renderer.drawTexturedRect(
       { x: Math.max(60, size.width - 300), y: 50, w: 250, h: 100 },
       { u1: 0, v1: 0, u2: 1, v2: 1 },
-      [255, 255, 255, 255],
+      [1, 1, 1, 1],
       gradientTexture
     );
 
@@ -214,7 +214,7 @@ export function createTextAtlasDemo(context: DemoCreateContext): DemoInstance {
         option.atlas,
         option.label,
         y,
-        index % 2 === 0 ? [200, 220, 255, 255] : [170, 255, 180, 255]
+        index % 2 === 0 ? [0.8, 0.9, 1, 1] : [0.7, 1, 0.7, 1]
       );
       y += gap;
     });

@@ -26,8 +26,7 @@ export class TextRenderer {
     text: string,
     x: number,
     y: number,
-    color: [number, number, number, number?] = [255, 255, 255, 255],
-    lineHeight?: number,
+    color: [number, number, number, number?] = [1, 1, 1, 1],
     scale: number = 1
   ): void {
     if (!this.fontAtlas) {

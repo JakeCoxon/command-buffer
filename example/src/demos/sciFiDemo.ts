@@ -1,9 +1,12 @@
 import type { Renderer } from "../../../src";
 
-const WHITE: [number, number, number, number] = [255, 255, 255, 255];
-const GREY: [number, number, number, number] = [180, 180, 180, 255];
-const DIM: [number, number, number, number] = [80, 80, 80, 255];
-const RED: [number, number, number, number] = [255, 60, 60, 255];
+const WHITE: [number, number, number, number] = [1, 1, 1, 1];
+const GREY: [number, number, number, number] = [0.7, 0.7, 0.7, 1];
+const DIM: [number, number, number, number] = [0.3, 0.3, 0.3, 1];
+const RED: [number, number, number, number] = [1, 0.23, 0.23, 1];
+const CYAN: [number, number, number, number] = [0.2, 0.85, 0.95, 1];
+const AMBER: [number, number, number, number] = [0.95, 0.72, 0.25, 1];
+const WEDGE_FILL: [number, number, number, number] = [0.15, 0.45, 0.5, 0.28];
 
 export interface SciFiDemoStats {
   lastVertexCount: number;
@@ -20,7 +23,7 @@ export function drawSciFiDemo(
   stats: SciFiDemoStats
 ): void {
   // Title
-  renderer.drawText("COMMAND BUFFER", 24, 28, WHITE, undefined, 1.2);
+  renderer.drawText("COMMAND BUFFER", 24, 28, WHITE);
   renderer.drawLine(24, 50, 220, 50, 1, GREY);
 
   // Data readouts with brackets
@@ -77,6 +80,7 @@ export function drawSciFiDemo(
   const radarRadius = 70;
   const radarPad = 16;
   drawRadarSweep(renderer, radarX, radarY, radarRadius, time);
+  drawAcquisitionBracket(renderer, radarX, radarY, time);
   renderer.drawText("RADAR", radarX - 28, radarY - radarRadius - 20, DIM);
   drawBracketFrame(
     renderer,
@@ -87,9 +91,10 @@ export function drawSciFiDemo(
     12
   );
 
-  // Right-side readout
+  // Right-side readout + primitive showcase (rounded shapes, arcs, polygons)
   const rx = w - 220;
-  renderer.drawRectOutline({ x: rx, y: 24, w: 196, h: 120 }, 1, WHITE);
+  const outH = 248;
+  renderer.drawRectOutline({ x: rx, y: 24, w: 196, h: outH }, 1, WHITE);
   renderer.drawText("OUTPUT", rx + 8, 42, WHITE);
   renderer.drawLine(rx + 8, 56, rx + 188, 56, 0.8, DIM);
   renderer.drawText("VRTX", rx + 8, 74, DIM);
@@ -99,6 +104,30 @@ export function drawSciFiDemo(
   renderer.drawText("DRAW", rx + 8, 110, DIM);
   renderer.drawText("--", rx + 120, 110, GREY);
   drawBracketFrame(renderer, rx + 116, 70, 64, 48, 8);
+
+  renderer.drawText("BUS", rx + 8, 128, DIM);
+  renderer.drawRoundedRect({ x: rx + 8, y: 138, w: 180, h: 22 }, 6, [0.08, 0.1, 0.12, 1]);
+  renderer.drawRoundedRectOutline({ x: rx + 8, y: 138, w: 180, h: 22 }, 6, 1, CYAN);
+  const syncPhase = (time / 2600) % 1;
+  const gx = rx + 98;
+  const gy = 198;
+  renderer.drawText("SYNC", rx + 8, 172, DIM);
+  renderer.drawArcOutline(gx, gy, 28, -Math.PI * 0.82, Math.PI * 0.82, 1.1, WHITE, 36);
+  renderer.drawArc(gx, gy, 23, -Math.PI * 0.82, -Math.PI * 0.82 + Math.PI * 1.64 * syncPhase, AMBER, 28);
+  renderer.drawTriangleOutline(gx, gy - 38, gx - 8, gy - 52, gx + 8, gy - 52, 1, RED);
+  renderer.drawTriangle(gx - 14, gy + 44, gx + 14, gy + 44, gx, gy + 58, [0.25, 0.28, 0.32, 1]);
+  renderer.drawQuad(
+    rx + 138,
+    218,
+    rx + 184,
+    226,
+    rx + 174,
+    252,
+    rx + 122,
+    244,
+    [0.12, 0.35, 0.38, 0.85]
+  );
+  renderer.drawQuadOutline(rx + 138, 218, rx + 184, 226, rx + 174, 252, rx + 122, 244, 1, GREY);
 
   // Grid lines
   for (let i = 1; i <= 4; i++) {
@@ -123,6 +152,8 @@ export function drawSciFiDemo(
   renderer.drawText("MS", 220, statY, DIM);
   renderer.drawText(stats.lastRenderMs.toFixed(2), 248, statY, WHITE);
   drawBracketFrame(renderer, 244, statBoxY, 48, statBoxH, 6);
+
+  renderer.resetTransform();
 }
 
 function drawBracket(
@@ -173,11 +204,43 @@ function drawRadarSweep(
   renderer.drawCircleOutline(cx, cy, radius, 1.2, WHITE, 32);
   renderer.drawCircleOutline(cx, cy, radius * 0.5, 0.8, DIM, 24);
   const sweep = (time / 2000) % (Math.PI * 2);
+  const wedge = 0.42;
+  renderer.drawArc(cx, cy, radius * 0.92, sweep - wedge, sweep + wedge * 0.15, WEDGE_FILL, 28);
   const ex = cx + Math.cos(sweep) * radius;
   const ey = cy + Math.sin(sweep) * radius;
   renderer.drawLine(cx, cy, ex, ey, 1.2, RED);
+  renderer.drawCircle(ex, ey, 5, CYAN, 16);
+  renderer.drawCircle(cx - radius * 0.35, cy + radius * 0.22, 3, AMBER, 12);
+  renderer.drawArcOutline(cx, cy, radius * 0.72, sweep + 0.9, sweep + 2.1, 0.9, GREY, 20);
   renderer.drawLine(cx - radius, cy, cx + radius, cy, 0.8, DIM);
   renderer.drawLine(cx, cy - radius, cx, cy + radius, 0.8, DIM);
+}
+
+/** Rotating lock geometry: translate → rotate → scale, then save/restore nesting. */
+function drawAcquisitionBracket(
+  renderer: Renderer,
+  cx: number,
+  cy: number,
+  time: number
+) {
+  renderer.save();
+  renderer.translate(cx, cy);
+  renderer.rotate((time / 2400) * (Math.PI * 2));
+  renderer.scale(1.12, 1.12);
+  renderer.save();
+  renderer.rotate(Math.PI / 4);
+  const s = 22;
+  renderer.drawRoundedRect({ x: -s, y: -s, w: s * 2, h: s * 2 }, 4, [0.2, 0.85, 0.95, 0.12]);
+  renderer.drawRoundedRectOutline({ x: -s, y: -s, w: s * 2, h: s * 2 }, 4, 1, CYAN);
+  renderer.restore();
+  const d = 36;
+  renderer.drawTriangle(-d, 0, -d - 12, -8, -d - 12, 8, CYAN);
+  renderer.drawTriangle(d, 0, d + 12, -8, d + 12, 8, CYAN);
+  renderer.drawTriangle(0, -d, -8, -d - 12, 8, -d - 12, CYAN);
+  renderer.drawTriangle(0, d, -8, d + 12, 8, d + 12, CYAN);
+  renderer.drawQuad(-10, -10, 12, -7, 9, 11, -14, 8, [0.95, 0.55, 0.15, 0.35]);
+  renderer.drawQuadOutline(-10, -10, 12, -7, 9, 11, -14, 8, 0.9, WHITE);
+  renderer.restore();
 }
 
 function drawSystemPanel(
