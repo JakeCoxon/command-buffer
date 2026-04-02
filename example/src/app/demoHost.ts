@@ -44,6 +44,10 @@ export class DemoHost {
 
     const initialDemoId = this.readInitialDemoId();
     await this.activateDemoById(initialDemoId);
+    requestAnimationFrame(() => {
+      this.resizeCanvas();
+      this.activeDemo?.onResize?.(this.size);
+    });
     this.rafHandle = requestAnimationFrame(this.onFrame);
   }
 
@@ -153,9 +157,20 @@ export class DemoHost {
   }
 
   private resizeCanvas(): void {
-    const width = window.innerWidth;
-    const height = window.innerHeight;
     const pixelRatio = window.devicePixelRatio || 1;
+    let width = Math.floor(this.activeCanvas.clientWidth);
+    let height = Math.floor(this.activeCanvas.clientHeight);
+    if (width === 0 || height === 0) {
+      const parent = this.activeCanvas.parentElement;
+      if (parent) {
+        width = Math.floor(parent.clientWidth);
+        height = Math.floor(parent.clientHeight);
+      }
+    }
+    if (width === 0 || height === 0) {
+      width = window.innerWidth;
+      height = window.innerHeight;
+    }
 
     this.size = { width, height, pixelRatio };
 

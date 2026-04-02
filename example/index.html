@@ -7,10 +7,16 @@
     <link rel="stylesheet" href="/src/style.css" />
   </head>
   <body>
-    <div id="demo-nav"></div>
-    <div id="demo-controls"></div>
-    <div id="stats"></div>
-    <canvas id="canvas"></canvas>
+    <div id="app-shell">
+      <aside id="demo-sidebar">
+        <div id="demo-nav"></div>
+        <div id="demo-controls"></div>
+        <div id="stats"></div>
+      </aside>
+      <main id="demo-canvas-host">
+        <canvas id="canvas"></canvas>
+      </main>
+    </div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
