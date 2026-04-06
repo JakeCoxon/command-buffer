@@ -129,11 +129,12 @@ export function createMovingRectsDemo(context: DemoCreateContext): DemoInstance 
     lastFrameTime = time;
     const mouseRecentlyMoved = mouse.active && time - mouse.lastMoveTime < 150;
 
-    renderer.setFontAtlas(fontAtlas);
     renderer.beginFrame({
       rect: { x: 0, y: 0, w: size.width, h: size.height },
       pixelRatio: size.pixelRatio,
     });
+    const ctx = renderer.createContext();
+    ctx.setFontAtlas(fontAtlas);
 
     if (rects.length === 0) {
       initRects();
@@ -173,8 +174,10 @@ export function createMovingRectsDemo(context: DemoCreateContext): DemoInstance 
         r.x = Math.max(0, Math.min(size.width - r.w, r.x));
         r.y = Math.max(0, Math.min(size.height - r.h, r.y));
       }
-      renderer.drawRect({ x: r.x, y: r.y, w: r.w, h: r.h }, r.color);
-      renderer.drawText(`${Math.round(r.x)},${Math.round(r.y)}`, r.x, r.y, [1, 1, 1, 1]);
+      ctx.setFillColor(r.color);
+      ctx.drawRect({ x: r.x, y: r.y, w: r.w, h: r.h });
+      ctx.setFillColor([1, 1, 1, 1]);
+      ctx.drawText(`${Math.round(r.x)},${Math.round(r.y)}`, r.x, r.y);
     }
 
     const start = performance.now();

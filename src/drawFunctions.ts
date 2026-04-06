@@ -26,7 +26,13 @@ export class PaintedShape {
 
 export class ArcShape {
 
-  constructor(public x: number, public y: number, public radius: number, public startAngle: number = 0, public endAngle: number = Math.PI * 2) {
+  constructor(
+    public x: number, public y: number, 
+    public radius: number, 
+    public startAngle: number = 0, 
+    public endAngle: number = Math.PI * 2,
+    public segments: number = 24,
+  ) {
   }
 
   paint(commandBuffer: CommandBuffer, options: PaintOptions) {
@@ -396,8 +402,7 @@ export function applyTransformPoint(transform: Transform, x: number, y: number):
 }
 
 export function fillArc(commandBuffer: CommandBuffer, transform: Transform, arc: ArcShape, paint: PaintOptions) {
-  const { x, y, radius, startAngle, endAngle } = arc;
-  const segments = 24;
+  const { x, y, radius, startAngle, endAngle, segments } = arc;
   const angleRange = endAngle - startAngle;
 
   const center = applyTransformPoint(transform, x, y);
@@ -431,13 +436,12 @@ export function fillArc(commandBuffer: CommandBuffer, transform: Transform, arc:
 }
 
 export function strokeArc(commandBuffer: CommandBuffer, transform: Transform, arc: ArcShape, paint: PaintOptions) {
-  const { x, y, radius, startAngle, endAngle } = arc;
+  const { x, y, radius, startAngle, endAngle, segments } = arc;
   const strokeWidth = paint.strokeWidth!;
   const radiusOuter = radius + strokeWidth * 0.5;
   const radiusInner = Math.max(0, radius - strokeWidth * 0.5);
 
   const angleRange = endAngle - startAngle;
-  const segments = 24;
 
   for (let i = 0; i < segments; i++) {
     const t0 = i / segments;

@@ -85,12 +85,14 @@ export function createColoredDemoModule(context: DemoCreateContext): DemoInstanc
 
   function render(time: number): void {
     regl.clear({ color: [0, 0, 0, 1] });
-    renderer.setFontAtlas(fontAtlas);
+    const ctx = renderer.createContext();
     renderer.beginFrame({
       rect: { x: 0, y: 0, w: size.width, h: size.height },
       pixelRatio: size.pixelRatio,
     });
-    drawColoredDemo(renderer, time, size.width, size.height);
+    
+    ctx.setFontAtlas(fontAtlas);
+    drawColoredDemo(ctx, time, size.width, size.height);
 
     const start = performance.now();
     let frame!: FrameCommands;

@@ -24,6 +24,7 @@ export function createTextAtlasDemo(context: DemoCreateContext): DemoInstance {
   const regl = createREGL({ canvas: context.canvas }) as any;
   const adapter = new ReglAdapter(regl as any);
   const renderer = new Renderer(adapter);
+  const ctx = renderer.createContext();
 
   const debugView = new TextDebugView();
   const atlasOptions: AtlasOption[] = [];
@@ -147,12 +148,13 @@ export function createTextAtlasDemo(context: DemoCreateContext): DemoInstance {
     const sample = debugSampleText;
     const scale = 10;
     const x = 50;
-    renderer.setFontAtlas(atlas);
-    renderer.drawText(title, x, startY - 18 * scale, [180, 180, 200, 255]);
-    renderer.drawText(sample, x, startY, sampleColor, scale);
+    ctx.setFontAtlas(atlas);
+    ctx.drawText(title, x, startY - 18 * scale);
+    ctx.setFillColor(sampleColor);
+    ctx.drawText(sample, x, startY, scale);
 
-    const runWidth = renderer.measureText(sample) * scale;
-    const lineMetrics = renderer.getLineMetrics(sample);
+    const runWidth = ctx.measureText(sample) * scale;
+    const lineMetrics = ctx.getLineMetrics(sample);
     const ascend = lineMetrics.ascend * scale;
     const descend = lineMetrics.descend * scale;
     const x2 = x + runWidth;
@@ -166,18 +168,24 @@ export function createTextAtlasDemo(context: DemoCreateContext): DemoInstance {
       const gw = m.width * scale;
       const gh = (m.ascend + m.descend) * scale;
       const gy = startY - m.ascend * scale;
-      renderer.drawRectOutline({ x: glyphX, y: gy, w: gw, h: gh }, 1, [0.9, 0.7, 0.3, 1]);
+      ctx.setStrokeColor([0.9, 0.7, 0.3, 1]);
+      ctx.setLineWidth(1);
+      ctx.drawRectOutline({ x: glyphX, y: gy, w: gw, h: gh });
       glyphX += m.width * scale;
     }
 
-    renderer.drawLine(x, startY, x2, startY, 1.5, [0.9, 0.7, 0.3, 1]);
-    renderer.drawLine(x, startY - ascend, x2, startY - ascend, 1.5, [0.3, 0.9, 0.5, 1]);
-    renderer.drawLine(x, startY + descend, x2, startY + descend, 1.5, [0.3, 0.6, 0.9, 1]);
-    renderer.drawRectOutline(
-      { x, y: startY - ascend, w: runWidth, h: ascend + descend },
-      1.5,
-      [200, 200, 220, 255]
-    );
+    ctx.setStrokeColor([0.9, 0.7, 0.3, 1]);
+    ctx.setLineWidth(1.5);
+    ctx.drawLine(x, startY, x2, startY);
+    ctx.setStrokeColor([0.3, 0.9, 0.5, 1]);
+    ctx.setLineWidth(1.5);
+    ctx.drawLine(x, startY - ascend, x2, startY - ascend);
+    ctx.setStrokeColor([0.3, 0.6, 0.9, 1]);
+    ctx.setLineWidth(1.5);
+    ctx.drawLine(x, startY + descend, x2, startY + descend);
+    ctx.setStrokeColor([200, 200, 220, 255]);
+    ctx.setLineWidth(1.5);
+    ctx.drawRectOutline({ x, y: startY - ascend, w: runWidth, h: ascend + descend });
   }
 
   function render(time: number): void {
@@ -188,22 +196,24 @@ export function createTextAtlasDemo(context: DemoCreateContext): DemoInstance {
     });
 
     activeFontAtlas = atlasOptions[0].atlas;
-    renderer.setFontAtlas(activeFontAtlas);
+    ctx.setFontAtlas(activeFontAtlas);
 
     const titleColor: [number, number, number, number] = [0.4, 0.8, 1, 1];
     const bodyColor: [number, number, number, number] = [0.8, 0.9, 1, 1];
 
-    renderer.drawText("Font Atlas Text Rendering", 50, 50, titleColor);
+    ctx.setFillColor(titleColor);
+    ctx.drawText("Font Atlas Text Rendering", 50, 50);
 
     const paragraph =
       "Unified text example showing atlas-backed rendering with metrics overlays. " +
       "Switch demos with keyboard or nav controls.";
-    renderer.drawTextWrapped(paragraph, 50, 100, size.width - 120, bodyColor);
+    ctx.setFillColor(bodyColor);
+    ctx.drawTextWrapped(paragraph, 50, 100, size.width - 120);
 
-    renderer.drawTexturedRect(
+    ctx.setFillColor([1, 1, 1, 1]);
+    ctx.drawTexturedRect(
       { x: Math.max(60, size.width - 300), y: 50, w: 250, h: 100 },
       { u1: 0, v1: 0, u2: 1, v2: 1 },
-      [1, 1, 1, 1],
       gradientTexture
     );
 
@@ -219,7 +229,7 @@ export function createTextAtlasDemo(context: DemoCreateContext): DemoInstance {
       y += gap;
     });
 
-    renderer.setFontAtlas(activeFontAtlas);
+    ctx.setFontAtlas(activeFontAtlas);
     const frame = renderer.endFrame();
     const end = performance.now();
 

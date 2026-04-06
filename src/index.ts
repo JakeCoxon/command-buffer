@@ -20,5 +20,6 @@ export { FontkitFontAtlas } from "./font/fontkitFontAtlas";
 export { PrebuiltFontAtlas } from "./font/prebuiltFontAtlas";
 
 // High-level API
-export { Renderer } from "./renderer";
+export { Renderer, RendererContext } from "./renderer";
 export { TransformStack } from "./transform";
+export type { PaintOptions } from "./drawFunctions";

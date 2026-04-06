@@ -112,12 +112,13 @@ export function createSciFiDemoModule(context: DemoCreateContext): DemoInstance 
   }
 
   function render(time: number): void {
-    renderer.setFontAtlas(fontAtlas);
     renderer.beginFrame({
       rect: { x: 0, y: 0, w: size.width, h: size.height },
       pixelRatio: size.pixelRatio,
     });
-    drawSciFiDemo(renderer, time, size.width, size.height, sciFiStats);
+    const ctx = renderer.createContext();
+    ctx.setFontAtlas(fontAtlas);
+    drawSciFiDemo(ctx, time, size.width, size.height, sciFiStats);
 
     const start = performance.now();
     let frame!: FrameCommands;

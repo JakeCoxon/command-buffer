@@ -5,7 +5,11 @@ function cloneTransform(t: Transform): Transform {
 }
 
 export class TransformStack {
-  private stack: Transform[] = [identityTransform()];
+  private stack: Transform[];
+
+  constructor(initialTransform: Transform = identityTransform()) {
+    this.stack = [initialTransform];
+  }
 
   pop() {
     if (this.stack.length <= 1) {

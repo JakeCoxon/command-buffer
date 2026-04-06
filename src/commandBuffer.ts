@@ -86,7 +86,6 @@ export class CommandBuffer {
    * Draw a textured rectangle (used for text rendering)
    */
   drawTexturedRect(rect: Rect, uv: { u1: number; v1: number; u2: number; v2: number }, color: Color, texture: Texture) {
-    this.usedTextures.set(texture.id, texture);
     const { x, y, w, h } = rect;
     const offset = this.beginTexturedDraw();
 
